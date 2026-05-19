@@ -1,0 +1,6 @@
+      login: admin
+      password: securepassword123
+
+для демонстрации: lt --port 5500
+
+переработать главную страницу (визуализация)

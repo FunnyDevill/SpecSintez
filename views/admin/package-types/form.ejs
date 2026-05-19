@@ -1,0 +1,19 @@
+<h1>
+   <%= type ? 'Редактирование типа упаковки' : 'Создание типа упаковки' %>
+</h1>
+<form method="POST" action="<%= action %>">
+   <label>Название *</label>
+   <input type="text" name="name" value="<%= type ? type.name : '' %>" required>
+
+   <label>URL иконки</label>
+   <input type="text" name="icon_url" value="<%= type ? type.icon_url : '' %>"
+      placeholder="/uploads/icons/canister.png">
+
+   <label>Порядок сортировки</label>
+   <input type="number" name="sort_order" value="<%= type ? type.sort_order : 0 %>">
+
+   <div style="margin-top: 20px;">
+      <button type="submit" class="btn">Сохранить</button>
+      <a href="/admin/package-types" class="btn-cancel">Отмена</a>
+   </div>
+</form>

@@ -1,0 +1,248 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #f0f2f5;
+}
+
+.admin-wrapper {
+    display: flex;
+    min-height: 100vh;
+}
+
+.admin-sidebar {
+    width: 260px;
+    background: #1e2a36;
+    color: #ecf0f1;
+    padding: 20px 0;
+}
+
+.admin-sidebar .logo {
+    font-size: 20px;
+    font-weight: bold;
+    text-align: center;
+    padding: 20px;
+    border-bottom: 1px solid #2c3e4e;
+    margin-bottom: 20px;
+}
+
+.admin-sidebar nav ul {
+    list-style: none;
+}
+
+.admin-sidebar nav ul li a {
+    display: block;
+    padding: 12px 24px;
+    color: #ecf0f1;
+    text-decoration: none;
+    transition: 0.2s;
+}
+
+.admin-sidebar nav ul li a:hover {
+    background: #2c3e4e;
+    padding-left: 30px;
+}
+
+.admin-content {
+    flex: 1;
+    padding: 30px 40px;
+}
+
+.admin-content h1 {
+    margin-bottom: 20px;
+    font-size: 28px;
+}
+
+.stats {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    flex: 1;
+    text-align: center;
+    font-size: 18px;
+}
+
+.data-table {
+    width: 100%;
+    background: white;
+    border-collapse: collapse;
+    margin-top: 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.data-table th, .data-table td {
+    border: 1px solid #ddd;
+    padding: 12px;
+    text-align: left;
+}
+
+.data-table th {
+    background: #f8f9fa;
+    font-weight: 600;
+}
+
+.btn, .link-btn {
+    background: #3498db;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    margin: 5px 0;
+}
+
+.link-btn {
+    background: none;
+    color: #e74c3c;
+    padding: 0;
+    font-size: 18px;
+}
+
+.btn:hover { background: #2980b9; }
+
+form label {
+    display: block;
+    margin-top: 15px;
+    font-weight: 500;
+}
+
+form input[type="text"],
+form input[type="number"],
+form textarea,
+form select {
+    width: 100%;
+    padding: 8px;
+    margin-top: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.image-preview {
+    max-width: 150px;
+    margin-top: 10px;
+}
+
+/* Дополнительные стили для форм и таблиц */
+.btn-small {
+    background: #3498db;
+    color: white;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    text-decoration: none;
+    display: inline-block;
+    margin: 2px;
+}
+.btn-danger {
+    background: #e74c3c;
+}
+.btn-cancel {
+    background: #95a5a6;
+    color: white;
+    padding: 8px 16px;
+    text-decoration: none;
+    border-radius: 4px;
+    display: inline-block;
+    margin-left: 10px;
+}
+.data-table img {
+    max-height: 40px;
+    max-width: 80px;
+}
+
+/* ===== СТИЛИ ДЛЯ ВЫБОРА КАТЕГОРИЙ (ДЕРЕВО С ЧЕКБОКСАМИ) ===== */
+.categories-selector {
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: #fff;
+    max-height: 400px;
+    overflow-y: auto;
+    margin: 10px 0;
+}
+
+.category-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background-color 0.2s;
+}
+
+.category-item:hover {
+    background-color: #f5f7fa;
+}
+
+/* Чекбокс */
+.category-checkbox {
+    margin-right: 10px;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+/* Текст категории */
+.category-label {
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1.4;
+    user-select: none;
+    flex-grow: 1;
+}
+
+/* Отступы для уровней вложенности */
+.level-0 {
+    padding-left: 0;
+}
+.level-1 {
+    padding-left: 24px;
+}
+.level-2 {
+    padding-left: 48px;
+}
+.level-3 {
+    padding-left: 72px;
+}
+.level-4 {
+    padding-left: 96px;
+}
+.level-5 {
+    padding-left: 120px;
+}
+
+/* Чередование фона для лучшей читаемости */
+.category-item:nth-child(even) {
+    background-color: #fcfcfc;
+}
+
+.category-item:hover {
+    background-color: #eef5ff;
+}
+
+/* Акцент на выбранной категории (можно использовать, если нужно) */
+.category-item.has-children {
+    font-weight: 500;
+    border-left: 3px solid #3498db;
+}
+
+/* Иконка-подсказка для родителей (опционально) */
+.category-item .toggle-hint {
+    font-size: 12px;
+    margin-left: 8px;
+    color: #888;
+}

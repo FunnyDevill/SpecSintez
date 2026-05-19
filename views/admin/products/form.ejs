@@ -1,0 +1,148 @@
+<h1><%= product ? 'Редактирование товара' : 'Создание товара' %></h1>
+
+<form method="POST" action="<%= action %>">
+   <label>Название *</label>
+   <input type="text" name="name" value="<%= product ? product.name : '' %>" required>
+
+   <label>Slug *</label>
+   <input type="text" name="slug" value="<%= product ? product.slug : '' %>" required>
+
+   <label>Краткое описание (excerpt)</label>
+   <textarea name="excerpt" rows="3"><%= product ? product.excerpt : '' %></textarea>
+
+   <label>Полное описание</label>
+   <div id="quill-editor" style="height: 400px; margin-bottom: 20px;"></div>
+   <input type="hidden" name="description" id="description-hidden">
+
+   <label>URL основного изображения</label>
+   <input type="text" name="image_url" value="<%= product ? product.image_url : '' %>">
+
+   <!-- Основная категория (для навигации) -->
+   <label>Основная категория</label>
+   <select name="category_id">
+      <option value="">— Без категории —</option>
+      <% categories.forEach(cat=> { %>
+         <option value="<%= cat.id %>" <%=product && product.category_id==cat.id ? 'selected' : '' %>><%= cat.name %></option>
+      <% }); %>
+   </select>
+
+   <!-- БЛОК ВЫБОРА ОТРАСЛЕЙ С ЧЕКБОКСАМИ И АВТО-ВЫБОРОМ РОДИТЕЛЕЙ -->
+   <label>Отрасли применения (можно выбрать несколько)</label>
+   <div class="categories-selector">
+      <% categories.forEach(cat=> { %>
+         <div class="category-item level-<%= cat.level %>">
+            <input type="checkbox" name="categories" value="<%= cat.id %>" class="category-checkbox"
+               <%= (selectedCategories && selectedCategories.includes(cat.id)) ? 'checked' : '' %>
+               data-parent-id="<%= cat.parent_id || '' %>">
+            <label class="category-label"><%= cat.name %></label>
+         </div>
+      <% }); %>
+   </div>
+   <small>Выберите все отрасли, в которых применяется данный товар. При выборе дочерней категории автоматически выберутся все родительские.</small>
+
+   <label>Порядок сортировки</label>
+   <input type="number" name="sort_order" value="<%= product ? product.sort_order : 0 %>">
+
+   <label>
+      <input type="checkbox" name="is_active" <%=product && product.is_active ? 'checked' : '' %>> Активен
+   </label>
+
+   <div style="margin-top: 20px;">
+      <button type="submit" class="btn">Сохранить</button>
+      <a href="/admin/products" class="btn-cancel">Отмена</a>
+   </div>
+</form>
+
+<% if (product) { %>
+   <hr style="margin: 30px 0;">
+   <div style="background: #f9f9f9; padding: 20px; border-radius: 8px;">
+      <h3>Дополнительные настройки</h3>
+      <p style="margin-bottom: 15px;">Управление изображениями, опциями и типами упаковок для этого товара:</p>
+      <a href="/admin/products/<%= product.id %>/images" class="btn-small">🖼️ Изображения</a>
+      <a href="/admin/products/<%= product.id %>/options" class="btn-small">📦 Опции</a>
+      <a href="/admin/products/<%= product.id %>/package-types" class="btn-small">🏷️ Типы упаковок</a>
+   </div>
+<% } %>
+
+<link rel="stylesheet" href="/quill/quill.snow.css">
+<script src="/quill/quill.js"></script>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    // Quill editor
+    var quill = new Quill('#quill-editor', {
+      theme: 'snow',
+      placeholder: 'Введите описание товара...',
+      modules: {
+        toolbar: [
+          ['bold', 'italic', 'underline'],
+          [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+          ['clean']
+        ]
+      }
+    });
+
+    const existingHtml = `<%- product ? product.description : '' %>`;
+    if (existingHtml && existingHtml !== '') {
+      quill.root.innerHTML = existingHtml;
+    }
+
+    const form = document.querySelector('form');
+    const hiddenField = document.getElementById('description-hidden');
+    form.addEventListener('submit', function () {
+      hiddenField.value = quill.root.innerHTML;
+    });
+
+    // ========== ЛОГИКА ВЫБОРА КАТЕГОРИЙ (родители вверх, при выключении – дети вниз) ==========
+    const allCheckboxes = document.querySelectorAll('input[type="checkbox"][name="categories"]');
+    if (allCheckboxes.length === 0) return;
+
+    // Карта: id чекбокса -> сам чекбокс
+    const checkboxById = new Map();
+    // Карта: parent_id -> массив прямых дочерних чекбоксов (для выключения потомков)
+    const childrenMap = new Map();
+
+    allCheckboxes.forEach(cb => {
+      const id = cb.value;
+      const parentId = cb.getAttribute('data-parent-id');
+      checkboxById.set(id, cb);
+      if (parentId && parentId !== '') {
+        if (!childrenMap.has(parentId)) childrenMap.set(parentId, []);
+        childrenMap.get(parentId).push(cb);
+      }
+    });
+
+    // Рекурсивно выключает всех потомков (всех уровней) – используется при снятии галочки
+    function setDescendantsState(parentId, isChecked) {
+      const children = childrenMap.get(parentId) || [];
+      children.forEach(child => {
+        child.checked = isChecked;
+        setDescendantsState(child.value, isChecked);
+      });
+    }
+
+    allCheckboxes.forEach(cb => {
+      cb.addEventListener('change', function () {
+        const isChecked = this.checked;
+        const thisId = this.value;
+
+        if (isChecked) {
+          // При включении: находим всех прямых родителей (вверх по цепочке) и включаем их
+          let parentId = this.getAttribute('data-parent-id');
+          while (parentId && parentId !== '') {
+            const parentCb = checkboxById.get(parentId);
+            if (parentCb && !parentCb.checked) {
+              parentCb.checked = true;
+            }
+            // Переходим к родителю родителя
+            parentId = parentCb ? parentCb.getAttribute('data-parent-id') : null;
+          }
+          // НЕ включаем потомков
+        } else {
+          // При выключении: выключаем всех потомков (всех уровней вниз)
+          setDescendantsState(thisId, false);
+        }
+      });
+    });
+  });
+</script>

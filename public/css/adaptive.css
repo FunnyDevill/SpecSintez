@@ -1,0 +1,331 @@
+/* ==========================================
+   АДАПТИВНЫЕ СТИЛИ (НОВАЯ ЦВЕТОВАЯ СХЕМА)
+   ========================================== */
+
+/* Планшеты, небольшие ноутбуки (≤ 1200px) */
+@media (max-width: 1200px) {
+   .industries__grid {
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+   }
+}
+
+/* Планшеты (≤ 992px) */
+@media (max-width: 992px) {
+   .industries__grid {
+      grid-template-columns: repeat(3, 1fr);
+   }
+
+   .about__cards {
+      grid-template-columns: repeat(2, 1fr);
+   }
+
+   .products__grid {
+      grid-template-columns: repeat(2, 1fr);
+   }
+
+   .news__grid {
+      grid-template-columns: repeat(2, 1fr);
+   }
+
+   .catalog-layout {
+      grid-template-columns: 1fr;
+   }
+
+   .catalog-sidebar {
+      margin-bottom: 1.5rem;
+   }
+
+   .hero-news {
+      grid-template-columns: 1fr;
+      text-align: center;
+   }
+
+   .hero-news__content {
+      align-items: center;
+   }
+
+   .hero-news__image-placeholder {
+      width: 100%;
+      height: 180px;
+      order: -1;
+   }
+
+   .page-content {
+      margin-top: 60px;
+   }
+}
+
+/* Мобильные устройства (≤ 768px) */
+@media (max-width: 768px) {
+   .page-content {
+      padding: 0 1.25rem;
+      margin-top: 60px;
+   }
+
+   .industries {
+      padding: 2rem 1rem;
+   }
+
+   .industries__grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem;
+   }
+
+   .industry-card {
+      padding: 1rem;
+   }
+
+   .industry-card__icon svg {
+      width: 28px;
+      height: 28px;
+   }
+
+   .about {
+      padding: 3rem 1.25rem;
+   }
+
+   .about__cards {
+      grid-template-columns: 1fr;
+      gap: 1rem;
+   }
+
+   .products {
+      padding: 3rem 1.25rem;
+   }
+
+   .products__grid {
+      grid-template-columns: 1fr;
+      margin-bottom: 1rem;
+   }
+
+   .product-card {
+      flex-direction: row;
+      align-items: center;
+      text-align: left;
+      gap: 1rem;
+   }
+
+   .product-card__image-placeholder {
+      width: 80px;
+      padding-top: 0;
+      height: 80px;
+      flex-shrink: 0;
+   }
+
+   .news {
+      padding: 3rem 1.25rem;
+   }
+
+   .news__grid {
+      grid-template-columns: 1fr;
+      margin-bottom: 1rem;
+   }
+
+   .hero {
+      padding: 4rem 1rem;
+      min-height: auto;
+   }
+
+   .hero__title {
+      font-size: 2rem;
+   }
+
+   .hero__desc {
+      font-size: 1rem;
+   }
+
+   .hero__buttons {
+      flex-direction: column;
+      gap: 0.75rem;
+   }
+
+   .hero__buttons .btn {
+      width: 100%;
+      text-align: center;
+   }
+
+   .cta__inner {
+      flex-direction: column;
+      text-align: center;
+      padding: 0 1rem;
+   }
+
+   .cta__form {
+      justify-content: center;
+   }
+
+   .products-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+   }
+
+   .catalog-sidebar {
+      padding: 1rem;
+   }
+
+   .category-tree .tree-item {
+      padding: 0.5rem;
+      font-size: 0.85rem;
+   }
+
+   .hero-news {
+      padding: 1.5rem;
+   }
+
+   .hero-news__content h2 {
+      font-size: 1.5rem;
+   }
+
+   .news-grid {
+      grid-template-columns: 1fr;
+   }
+
+   .contact-form {
+      grid-template-columns: 1fr;
+   }
+
+   /* ===== ПОЧТА ПОД ТЕЛЕФОНОМ ===== */
+   .header_layer .contact {
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.25rem;
+   }
+
+   .header_layer .contact .email {
+      display: flex;
+      font-size: 0.7rem;
+   }
+
+   /* Бургер-меню */
+   .burger-toggle {
+      display: flex;
+   }
+
+   .main-nav {
+      display: none;
+      position: fixed;
+      top: 70px;
+      left: 0;
+      width: 100%;
+      background: var(--dark-bg-alt);
+      backdrop-filter: blur(12px);
+      padding: 1rem 0;
+      flex-direction: column;
+      gap: 0;
+      box-shadow: var(--shadow-lg);
+      z-index: 100;
+   }
+
+   .main-nav.open {
+      display: flex;
+   }
+
+   .main-nav .main-nav__link {
+      padding: 0.75rem 1.5rem;
+      border-bottom: 1px solid var(--border-color);
+      width: 100%;
+      text-align: left;
+   }
+
+   .main-nav .main-nav__link:hover {
+      color: var(--teal);
+   }
+
+   .main-nav .main-nav__link::after {
+      display: none;
+   }
+
+   .footer__container {
+      grid-template-columns: 1fr;
+      text-align: center;
+   }
+
+   .footer-column .logo-link {
+      justify-content: center;
+   }
+
+   .footer-column h2::after {
+      left: 50%;
+      transform: translateX(-50%);
+   }
+
+   .footer-column ul li {
+      justify-content: center;
+   }
+
+   .social-links {
+      justify-content: center;
+   }
+}
+
+/* Узкие мобильные (≤ 568px) */
+@media (max-width: 568px) {
+   .header_layer .phone a,
+   .header_layer .email a {
+      font-size: 0.55rem;
+   }
+
+   .header_layer .phone {
+      white-space: nowrap;
+   }
+}
+
+/* Маленькие мобильные (≤ 480px) */
+@media (max-width: 480px) {
+   .header_layer .contact {
+      display: none;
+   }
+
+   .page-content h1 {
+      font-size: 1.8rem;
+   }
+
+   .page-content h2 {
+      font-size: 1.4rem;
+   }
+
+   .industries__grid {
+      grid-template-columns: 1fr;
+   }
+
+   .products-grid {
+      grid-template-columns: 1fr;
+   }
+
+   .product-card {
+      flex-direction: column;
+      text-align: center;
+   }
+
+   .product-card__image-placeholder {
+      width: 100px;
+      height: 100px;
+      margin: 0 auto;
+   }
+
+   .hero__title {
+      font-size: 1.75rem;
+   }
+
+   .hero__badge {
+      font-size: 0.7rem;
+   }
+
+   .section-title {
+      font-size: 1.5rem;
+   }
+
+   .about__stats {
+      flex-direction: column;
+      gap: 1rem;
+   }
+
+   .catalog-sidebar {
+      padding: 0.75rem;
+   }
+
+   .main-nav {
+      top: 60px;
+   }
+}

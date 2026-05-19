@@ -1,0 +1,185 @@
+<h1>Категории</h1>
+<a href="/admin/categories/create" class="btn">+ Создать категорию</a>
+
+<table class="data-table categories-tree">
+   <thead>
+      <tr>
+         <th></th>
+         <th>ID</th>
+         <th>Название</th>
+         <th>Slug</th>
+         <th>Родитель</th>
+         <th>Сорт.</th>
+         <th>Активна</th>
+         <th>Действия</th>
+      </tr>
+   </thead>
+   <tbody id="categories-tree-body">
+      <% categories.forEach(cat=> { %>
+         <tr class="cat-node depth-<%= cat.level %>" data-id="<%= cat.id %>" data-parent="<%= cat.parent_id || 0 %>">
+            <td class="toggle-cell">
+               <% if (cat.has_children) { %>
+                  <button class="toggle-btn" data-id="<%= cat.id %>">▼</button>
+                  <% } else { %>
+                     <span class="no-children"></span>
+                     <% } %>
+            </td>
+            <td>
+               <%= cat.id %>
+            </td>
+            <td style="padding-left: <%= cat.level * 20 %>px;">
+               <%= cat.name %>
+            </td>
+            <td>
+               <%= cat.slug %>
+            </td>
+            <td>
+               <%= cat.parent_id || '-' %>
+            </td>
+            <td>
+               <%= cat.sort_order %>
+            </td>
+            <td>
+               <%= cat.is_active ? '✅' : '❌' %>
+            </td>
+            <td>
+               <a href="/admin/categories/<%= cat.id %>/edit">✏️</a>
+               <form method="POST" action="/admin/categories/<%= cat.id %>/delete" style="display:inline;"
+                  onsubmit="return confirm('Удалить категорию? Все дочерние должны быть удалены.')">
+                  <button type="submit" class="btn-small btn-danger">🗑️</button>
+               </form>
+            </td>
+         </tr>
+         <% }); %>
+   </tbody>
+</table>
+
+<style>
+   .cat-node.hidden-row {
+      display: none;
+   }
+
+   .toggle-btn {
+      background: none;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      width: 24px;
+      height: 24px;
+   }
+
+   .toggle-btn:hover {
+      background-color: #e0e0e0;
+   }
+
+   .no-children {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+   }
+
+   .data-table th:first-child {
+      width: 40px;
+   }
+</style>
+
+<script>
+   document.addEventListener('DOMContentLoaded', function () {
+      // Карта: id категории -> строка DOM
+      const rows = document.querySelectorAll('.cat-node');
+      const rowMap = new Map();
+      rows.forEach(row => {
+         const id = parseInt(row.getAttribute('data-id'));
+         rowMap.set(id, row);
+      });
+
+      // Получить всех прямых потомков (только детей, не внуков)
+      function getDirectChildren(parentId, allRowsMap) {
+         const children = [];
+         for (let [id, row] of allRowsMap.entries()) {
+            const parent = parseInt(row.getAttribute('data-parent'));
+            if (parent === parentId) {
+               children.push(id);
+            }
+         }
+         return children;
+      }
+
+      // Рекурсивно скрыть всех потомков (для сворачивания родителя)
+      function hideAllDescendants(parentId, allRowsMap) {
+         const children = getDirectChildren(parentId, allRowsMap);
+         children.forEach(childId => {
+            const childRow = allRowsMap.get(childId);
+            if (childRow) childRow.classList.add('hidden-row');
+            // Скрываем и их потомков
+            hideAllDescendants(childId, allRowsMap);
+         });
+      }
+
+      // Показать только прямых потомков (без рекурсии)
+      function showDirectChildren(parentId, allRowsMap) {
+         const children = getDirectChildren(parentId, allRowsMap);
+         children.forEach(childId => {
+            const childRow = allRowsMap.get(childId);
+            if (childRow) childRow.classList.remove('hidden-row');
+         });
+      }
+
+      // Проверить, видим ли хоть один прямой потомок
+      function hasVisibleDirectChildren(parentId, allRowsMap) {
+         const children = getDirectChildren(parentId, allRowsMap);
+         return children.some(childId => {
+            const childRow = allRowsMap.get(childId);
+            return childRow && !childRow.classList.contains('hidden-row');
+         });
+      }
+
+      // Обработчики для кнопок
+      document.querySelectorAll('.toggle-btn').forEach(btn => {
+         btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            const catId = parseInt(this.getAttribute('data-id'));
+            const hasVisible = hasVisibleDirectChildren(catId, rowMap);
+            if (hasVisible) {
+               // Сворачиваем: скрываем всех прямых потомков и рекурсивно всех их потомков
+               const children = getDirectChildren(catId, rowMap);
+               children.forEach(childId => {
+                  hideAllDescendants(childId, rowMap);
+                  const childRow = rowMap.get(childId);
+                  if (childRow) childRow.classList.add('hidden-row');
+               });
+               this.textContent = '▶';
+            } else {
+               // Разворачиваем: показываем только прямых потомков
+               showDirectChildren(catId, rowMap);
+               this.textContent = '▼';
+            }
+         });
+      });
+
+      // Инициализация: скрыть все строки, кроме корневых (parent_id = 0)
+      function initCollapse() {
+         rows.forEach(row => {
+            const parent = parseInt(row.getAttribute('data-parent'));
+            if (parent !== 0 && !isNaN(parent)) {
+               row.classList.add('hidden-row');
+            }
+         });
+         // Установить правильные иконки и видимость кнопок
+         document.querySelectorAll('.toggle-btn').forEach(btn => {
+            const catId = parseInt(btn.getAttribute('data-id'));
+            const childrenCount = getDirectChildren(catId, rowMap).length;
+            if (childrenCount === 0) {
+               btn.style.visibility = 'hidden';
+            } else {
+               btn.style.visibility = 'visible';
+               // Изначально все дочерние скрыты -> иконка "▶"
+               btn.textContent = '▶';
+            }
+         });
+      }
+
+      initCollapse();
+   });
+</script>

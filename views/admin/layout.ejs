@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>
+      <%= title || 'Админ-панель' %> | СпецСинтез
+   </title>
+   <link rel="stylesheet" href="/admin/css/admin.css">
+</head>
+
+<body>
+   <div class="admin-wrapper">
+      <aside class="admin-sidebar">
+         <div class="logo">СпецСинтез Админ</div>
+         <nav>
+            <ul>
+               <li><a href="/admin">Главная</a></li>
+               <li><a href="/admin/news">Новости</a></li>
+               <li><a href="/admin/categories">Категории</a></li>
+               <li><a href="/admin/products">Товары</a></li>
+               <li><a href="/admin/package-types">Типы упаковок</a></li>
+               <li><a href="/admin/logout">Выйти</a></li>
+            </ul>
+         </nav>
+      </aside>
+      <main class="admin-content">
+         <%- body %>
+      </main>
+   </div>
+   <script src="/admin/js/admin.js"></script>
+</body>
+
+</html>

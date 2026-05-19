@@ -1,0 +1,38 @@
+<h1>
+   <%= category ? 'Редактирование категории' : 'Создание категории' %>
+</h1>
+<form method="POST" action="<%= action %>">
+   <label>Название *</label>
+   <input type="text" name="name" value="<%= category ? category.name : '' %>" required>
+
+   <label>Slug *</label>
+   <input type="text" name="slug" value="<%= category ? category.slug : '' %>" required>
+
+   <label>Родительская категория</label>
+   <select name="parent_id">
+      <option value="">— Нет (корневая) —</option>
+      <% parents.forEach(p=> { %>
+         <option value="<%= p.id %>" <%=category && category.parent_id==p.id ? 'selected' : '' %>><%= p.name %>
+         </option>
+         <% }); %>
+   </select>
+
+   <label>Порядок сортировки</label>
+   <input type="number" name="sort_order" value="<%= category ? category.sort_order : 0 %>">
+
+   <label>Описание</label>
+   <textarea name="description" rows="4"><%= category ? category.description : '' %></textarea>
+
+   <label>URL изображения</label>
+   <input type="text" name="image_url" value="<%= category ? category.image_url : '' %>">
+
+   <label>
+      <input type="checkbox" name="is_active" <%=category && category.is_active ? 'checked' : '' %>> Активна
+   </label>
+
+   <div style="margin-top: 20px;">
+      <button type="submit" class="btn">Сохранить</button>
+      <a href="/admin/categories" class="btn-cancel">Отмена</a>
+   </div>
+</form>
+<script src="/admin/js/admin.js"></script>

@@ -1,0 +1,41 @@
+<h1>
+   <%= news ? 'Редактирование новости' : 'Создание новости' %>
+</h1>
+<form method="POST" action="<%= action %>">
+   <label>Заголовок *</label>
+   <input type="text" name="title" value="<%= news ? news.title : '' %>" required>
+
+   <label>Slug (URL) *</label>
+   <input type="text" name="slug" value="<%= news ? news.slug : '' %>" required>
+
+   <label>Краткое описание (excerpt)</label>
+   <textarea name="excerpt" rows="3"><%= news ? news.excerpt : '' %></textarea>
+
+   <label>Полный текст (HTML)</label>
+   <textarea name="content" rows="10"><%= news ? news.content : '' %></textarea>
+
+   <label>Дата публикации</label>
+   <input type="date" name="published_at"
+      value="<%= news && news.published_at ? new Date(news.published_at).toISOString().slice(0,10) : '' %>">
+
+   <label>URL изображения</label>
+   <input type="text" name="image_url" value="<%= news ? news.image_url : '' %>" placeholder="/uploads/news/photo.jpg">
+
+   <label>Meta Title</label>
+   <input type="text" name="meta_title" value="<%= news ? news.meta_title : '' %>">
+
+   <label>Meta Description</label>
+   <textarea name="meta_description" rows="2"><%= news ? news.meta_description : '' %></textarea>
+
+   <label>
+      <input type="checkbox" name="is_active" <%=news && news.is_active ? 'checked' : '' %>> Активна
+   </label>
+   <label>
+      <input type="checkbox" name="is_hero" <%=news && news.is_hero ? 'checked' : '' %>> Hero (главная новость)
+   </label>
+
+   <div style="margin-top: 20px;">
+      <button type="submit" class="btn">Сохранить</button>
+      <a href="/admin/news" class="btn-cancel">Отмена</a>
+   </div>
+</form>

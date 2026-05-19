@@ -1,0 +1,27 @@
+{
+  "name": "v1.1",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "ejs": "^5.0.2",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "markdown": "^0.5.0",
+    "markdown-it": "^14.1.1",
+    "marked": "^18.0.3",
+    "multer": "^2.1.1",
+    "pg": "^8.20.0",
+    "quill": "^2.0.3"
+  },
+  "description": ""
+}
