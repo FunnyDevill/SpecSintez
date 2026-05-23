@@ -8,6 +8,7 @@
          <th>ID</th>
          <th>Название</th>
          <th>Slug</th>
+         <th>Иконка</th>
          <th>Родитель</th>
          <th>Сорт.</th>
          <th>Активна</th>
@@ -34,6 +35,10 @@
                <%= cat.slug %>
             </td>
             <td>
+               <% if (cat.icon_svg) { %><img src="<%= cat.icon_svg %>" style="height: 24px;">
+                  <% } else { %>—<% } %>
+            </td>
+            <td>
                <%= cat.parent_id || '-' %>
             </td>
             <td>
@@ -42,10 +47,10 @@
             <td>
                <%= cat.is_active ? '✅' : '❌' %>
             </td>
-            <td>
-               <a href="/admin/categories/<%= cat.id %>/edit">✏️</a>
-               <form method="POST" action="/admin/categories/<%= cat.id %>/delete" style="display:inline;"
-                  onsubmit="return confirm('Удалить категорию? Все дочерние должны быть удалены.')">
+            <td class="actions">
+               <a href="/admin/categories/<%= cat.id %>/edit" class="btn-small">✏️</a>
+               <form method="POST" action="/admin/categories/<%= cat.id %>/delete" style="display:inline;">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                   <button type="submit" class="btn-small btn-danger">🗑️</button>
                </form>
             </td>
@@ -86,100 +91,73 @@
 
 <script>
    document.addEventListener('DOMContentLoaded', function () {
-      // Карта: id категории -> строка DOM
       const rows = document.querySelectorAll('.cat-node');
       const rowMap = new Map();
       rows.forEach(row => {
-         const id = parseInt(row.getAttribute('data-id'));
-         rowMap.set(id, row);
+         rowMap.set(parseInt(row.getAttribute('data-id')), row);
       });
 
-      // Получить всех прямых потомков (только детей, не внуков)
-      function getDirectChildren(parentId, allRowsMap) {
+      function getDirectChildren(parentId) {
          const children = [];
-         for (let [id, row] of allRowsMap.entries()) {
-            const parent = parseInt(row.getAttribute('data-parent'));
-            if (parent === parentId) {
-               children.push(id);
-            }
+         for (let [id, row] of rowMap.entries()) {
+            if (parseInt(row.getAttribute('data-parent')) === parentId) children.push(id);
          }
          return children;
       }
 
-      // Рекурсивно скрыть всех потомков (для сворачивания родителя)
-      function hideAllDescendants(parentId, allRowsMap) {
-         const children = getDirectChildren(parentId, allRowsMap);
+      function hideAllDescendants(parentId) {
+         const children = getDirectChildren(parentId);
          children.forEach(childId => {
-            const childRow = allRowsMap.get(childId);
+            const childRow = rowMap.get(childId);
             if (childRow) childRow.classList.add('hidden-row');
-            // Скрываем и их потомков
-            hideAllDescendants(childId, allRowsMap);
+            hideAllDescendants(childId);
          });
       }
 
-      // Показать только прямых потомков (без рекурсии)
-      function showDirectChildren(parentId, allRowsMap) {
-         const children = getDirectChildren(parentId, allRowsMap);
+      function showDirectChildren(parentId) {
+         const children = getDirectChildren(parentId);
          children.forEach(childId => {
-            const childRow = allRowsMap.get(childId);
+            const childRow = rowMap.get(childId);
             if (childRow) childRow.classList.remove('hidden-row');
          });
       }
 
-      // Проверить, видим ли хоть один прямой потомок
-      function hasVisibleDirectChildren(parentId, allRowsMap) {
-         const children = getDirectChildren(parentId, allRowsMap);
+      function hasVisibleDirectChildren(parentId) {
+         const children = getDirectChildren(parentId);
          return children.some(childId => {
-            const childRow = allRowsMap.get(childId);
+            const childRow = rowMap.get(childId);
             return childRow && !childRow.classList.contains('hidden-row');
          });
       }
 
-      // Обработчики для кнопок
       document.querySelectorAll('.toggle-btn').forEach(btn => {
          btn.addEventListener('click', function (e) {
             e.stopPropagation();
             const catId = parseInt(this.getAttribute('data-id'));
-            const hasVisible = hasVisibleDirectChildren(catId, rowMap);
-            if (hasVisible) {
-               // Сворачиваем: скрываем всех прямых потомков и рекурсивно всех их потомков
-               const children = getDirectChildren(catId, rowMap);
+            if (hasVisibleDirectChildren(catId)) {
+               const children = getDirectChildren(catId);
                children.forEach(childId => {
-                  hideAllDescendants(childId, rowMap);
+                  hideAllDescendants(childId);
                   const childRow = rowMap.get(childId);
                   if (childRow) childRow.classList.add('hidden-row');
                });
                this.textContent = '▶';
             } else {
-               // Разворачиваем: показываем только прямых потомков
-               showDirectChildren(catId, rowMap);
+               showDirectChildren(catId);
                this.textContent = '▼';
             }
          });
       });
 
-      // Инициализация: скрыть все строки, кроме корневых (parent_id = 0)
-      function initCollapse() {
-         rows.forEach(row => {
-            const parent = parseInt(row.getAttribute('data-parent'));
-            if (parent !== 0 && !isNaN(parent)) {
-               row.classList.add('hidden-row');
-            }
-         });
-         // Установить правильные иконки и видимость кнопок
-         document.querySelectorAll('.toggle-btn').forEach(btn => {
-            const catId = parseInt(btn.getAttribute('data-id'));
-            const childrenCount = getDirectChildren(catId, rowMap).length;
-            if (childrenCount === 0) {
-               btn.style.visibility = 'hidden';
-            } else {
-               btn.style.visibility = 'visible';
-               // Изначально все дочерние скрыты -> иконка "▶"
-               btn.textContent = '▶';
-            }
-         });
-      }
-
-      initCollapse();
+      // Инициализация: скрыть все некорневые
+      rows.forEach(row => {
+         if (parseInt(row.getAttribute('data-parent')) !== 0) {
+            row.classList.add('hidden-row');
+         }
+      });
+      document.querySelectorAll('.toggle-btn').forEach(btn => {
+         const catId = parseInt(btn.getAttribute('data-id'));
+         btn.textContent = '▶';
+      });
    });
 </script>

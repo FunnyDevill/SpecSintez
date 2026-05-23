@@ -1,0 +1,16 @@
+<ul style="list-style: none; padding-left: 0;">
+  <% items.forEach(item => { %>
+    <li class="tree-node <%= item.children.length > 0 ? 'has-children' : '' %> <%= item.children.length > 0 && !(selectedCategories.includes(item.id)) ? 'collapsed' : '' %>">
+      <span class="tree-toggle"><%= item.children.length > 0 ? '▶' : '' %></span>
+      <label class="category-label">
+        <input type="checkbox" name="categories" value="<%= item.id %>" class="category-checkbox"
+          <%= selectedCategories.includes(item.id) ? 'checked' : '' %>
+          data-parent-id="<%= item.parent_id || '' %>">
+        <%= item.name %>
+      </label>
+      <% if (item.children.length > 0) { %>
+        <%- include('_category_tree', { items: item.children, selectedCategories: selectedCategories, level: level + 1 }) %>
+      <% } %>
+    </li>
+  <% }); %>
+</ul>

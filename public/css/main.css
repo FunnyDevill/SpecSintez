@@ -59,7 +59,7 @@ a:hover {
   text-shadow: 0 0 2px var(--teal-glow);
 }
 
-/* ===== ГЛОБАЛЬНЫЙ КОНТЕЙНЕР ДЛЯ ВСЕХ СТРАНИЦ ===== */
+/* ===== ГЛОБАЛЬНЫЙ КОНТЕЙНЕР ===== */
 .page-content {
   max-width: 1400px;
   margin: 70px auto;
@@ -78,7 +78,7 @@ a:hover {
   margin: 0 auto;
 }
 
-/* ===== СКРОЛЛБАР (только для WebKit-браузеров) ===== */
+/* ===== СКРОЛЛБАР ===== */
 @supports (::-webkit-scrollbar) {
   ::-webkit-scrollbar {
     width: 8px;
@@ -105,7 +105,7 @@ a:hover {
   padding: 0.75rem 1.5rem;
   font-weight: 600;
   border-radius: 2rem;
-  transition: all 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
   border: 1px solid transparent;
   cursor: pointer;
 }
@@ -156,7 +156,7 @@ a:hover {
   background: var(--dark-bg-alt);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  transition: all 0.25s ease;
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
   border: 1px solid var(--border-color);
   height: 100%;
   display: flex;
@@ -185,13 +185,6 @@ a:hover {
 }
 .product-card:hover .product-card__image-placeholder img {
   transform: scale(1.05);
-}
-/* Заглушка для отсутствующего изображения */
-.product-card__image-placeholder.fallback {
-  background: rgba(0, 0, 0, 0.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 .product-card__image-placeholder.fallback::before {
   content: "🖼️";
@@ -236,7 +229,7 @@ a:hover {
   background: var(--dark-bg-alt);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  transition: 0.2s;
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
   border: 1px solid var(--border-color);
   height: 100%;
   display: flex;
@@ -289,32 +282,73 @@ a:hover {
   color: var(--teal-light);
 }
 
-/* ===== СЕТКА НОВОСТЕЙ ===== */
+/* ===== СЕТКИ (главная + страница новостей) ===== */
 .news__grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 1.5rem;
-  margin-bottom: 2rem;   /* ← отступ от сетки до кнопки */
+  margin-bottom: 2rem;
 }
-
-.news__more {
-  text-align: center;
-  margin-top: 0;         /* можно уточнить, если нужно */
-}
-
-/* ===== СЕТКА ТОВАРОВ НА ГЛАВНОЙ ===== */
 .products__grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 1.5rem;
-  margin-bottom: 2rem;   /* ← отступ от сетки до кнопки */
+  margin-bottom: 2rem;
+}
+/* Сетка для страницы новостей (отдельный класс) */
+.news-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 2rem;
 }
 
+.news__more,
 .products__more {
   text-align: center;
-  margin-top: 0;         /* можно оставить или уточнить */
 }
 
+/* ===== ГЛАВНАЯ НОВОСТЬ (hero) на странице новостей ===== */
+.hero-news {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  background: var(--dark-bg-alt);
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  margin-bottom: 2rem;
+  border: 1px solid var(--border-color);
+  transition: border-color 0.2s;
+}
+.hero-news:hover {
+  border-color: var(--teal);
+}
+.hero-news__content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.hero-news__content h2 {
+  font-size: 1.8rem;
+  color: var(--white);
+  margin-bottom: 1rem;
+}
+.hero-news__content p {
+  color: var(--white-dim);
+  margin-bottom: 1.5rem;
+}
+.hero-news__image-placeholder {
+  width: 100%;
+  height: 250px;
+  background: rgba(0,0,0,0.2);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.hero-news__image-placeholder img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 
 /* ===== КНОПКА "НАВЕРХ" ===== */
 .scroll-to-top {
@@ -333,7 +367,7 @@ a:hover {
   cursor: pointer;
   opacity: 0;
   visibility: hidden;
-  transition: all 0.3s ease;
+  transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
   z-index: 99;
   box-shadow: var(--shadow-md);
 }
@@ -346,7 +380,7 @@ a:hover {
   transform: translateY(-3px);
 }
 
-/* ===== АНИМАЦИЯ ПОЯВЛЕНИЯ СЕКЦИЙ ===== */
+/* ===== АНИМАЦИЯ ПОЯВЛЕНИЯ ===== */
 section {
   animation: fadeInUp 0.5s ease-out forwards;
 }
@@ -361,17 +395,26 @@ section {
   }
 }
 
-/* ===== АДАПТИВНОСТЬ ===== */
+/* ===== БАЗОВАЯ АДАПТИВНОСТЬ ===== */
 @media (max-width: 768px) {
-
   .scroll-to-top {
     width: 40px;
     height: 40px;
     bottom: 1rem;
     right: 1rem;
   }
-  .news__grid {
+  .news__grid,
+  .products__grid,
+  .news-grid {
     grid-template-columns: 1fr;
+  }
+  .hero-news {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+  .hero-news__image-placeholder {
+    height: 180px;
+    order: -1;
   }
   .catalog-layout {
     padding: 0 1rem;

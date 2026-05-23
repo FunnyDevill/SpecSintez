@@ -11,10 +11,10 @@
    <meta property="og:description" content="Индивидуальные условия, лабораторные разработки, оперативная доставка.">
    <link rel="icon" type="image/png" href="/images/logo/logo.png">
    <link rel="stylesheet" href="/css/main.css">
+   <link rel="stylesheet" href="/css/adaptive.css">
    <link rel="stylesheet" href="/css/header.css">
    <link rel="stylesheet" href="/css/footer.css">
    <link rel="stylesheet" href="/css/contract.css">
-   <link rel="stylesheet" href="/css/adaptive.css">
 </head>
 
 <body>
@@ -77,11 +77,19 @@
          <h2>Начать сотрудничество</h2>
          <p>Если Вы желаете обратиться к нашей компании с вопросом или предложением о сотрудничестве, заполните
             расположенную ниже форму, и мы оперативно свяжемся с Вами.</p>
-         <form class="contact-form" action="#" method="post">
+
+         <!-- Сообщения об отправке -->
+         <div id="form-message" style="display:none; padding:1rem; margin-bottom:1rem; border-radius:8px;"></div>
+
+         <form class="contact-form" id="contactForm" action="/api/send-form" method="POST">
+            <input type="hidden" name="form_type" value="contract">
             <div class="form-field"><label for="name">Ваше имя</label><input type="text" id="name" name="name"
                   placeholder="Иван Иванов"></div>
-            <div class="form-field required"><label for="phone">Ваш телефон *</label><input type="tel" id="phone"
-                  name="phone" required placeholder="+7 (___) ___-__-__"></div>
+            <div class="form-field required"><label for="phone">Ваш телефон *</label>
+               <input type="tel" id="phone" name="phone" required placeholder="+7 (___) ___-__-__"
+                  pattern="^(\+7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}$"
+                  title="Введите номер в формате +7 (XXX) XXX-XX-XX или 8XXXXXXXXXX">
+            </div>
             <div class="form-field required"><label for="email">Ваша почта *</label><input type="email" id="email"
                   name="email" required placeholder="example@mail.ru"></div>
             <div class="form-field"><label for="city">Ваш город</label><input type="text" id="city" name="city"
@@ -102,16 +110,19 @@
    </main>
 
    <!-- ПОДВАЛ (аналогичен) -->
-  <!-- CTA-ФОРМА -->
+   <!-- CTA-ФОРМА -->
    <section class="cta">
       <div class="cta__inner">
          <div class="cta__content">
             <h2>Нужна консультация?</h2>
             <p>Оставьте заявку – наш технолог подберёт идеальное средство за 1 день</p>
          </div>
-         <form class="cta__form" id="ctaForm" action="#" method="post">
-            <input type="text" placeholder="Ваше имя" required>
-            <input type="tel" placeholder="Телефон" required>
+         <form class="cta__form" id="ctaForm" action="/api/send-form" method="POST">
+            <input type="hidden" name="form_type" value="cta">
+            <input type="text" name="name" placeholder="Ваше имя" required>
+            <input type="tel" name="phone" placeholder="Телефон" required
+               pattern="^(\+7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}$"
+               title="Введите номер в формате +7 (XXX) XXX-XX-XX или 8XXXXXXXXXX">
             <button type="submit" class="btn btn-primary">Получить предложение</button>
          </form>
       </div>
@@ -186,6 +197,45 @@
       </svg></button>
 
    <script src="/js/main.js"></script>
+   <script>
+      document.addEventListener('DOMContentLoaded', function () {
+         const form = document.getElementById('contactForm');
+         const messageDiv = document.getElementById('form-message');
+
+         // Удаляем старый обработчик (если есть), чтобы избежать дублирования
+         // и используем только нашу логику.
+         form.removeEventListener('submit', null); // необязательно, но на всякий случай
+         form.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            messageDiv.style.display = 'none';
+
+            const formData = new FormData(form);
+            const urlEncoded = new URLSearchParams(formData).toString();
+            try {
+               const res = await fetch(form.action, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                  body: urlEncoded
+               });
+               const data = await res.json();
+               if (res.ok) {
+                  messageDiv.style.display = 'block';
+                  messageDiv.style.background = '#d4edda';
+                  messageDiv.style.color = '#155724';
+                  messageDiv.textContent = '✅ Спасибо! Ваша заявка отправлена. Мы свяжемся с вами в ближайшее время.';
+                  form.reset();
+               } else {
+                  throw new Error(data.error || 'Ошибка сервера');
+               }
+            } catch (err) {
+               messageDiv.style.display = 'block';
+               messageDiv.style.background = '#f8d7da';
+               messageDiv.style.color = '#721c24';
+               messageDiv.textContent = '❌ ' + (err.message || 'Произошла ошибка. Пожалуйста, попробуйте позже.');
+            }
+         });
+      });
+   </script>
 </body>
 
 </html>

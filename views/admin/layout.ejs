@@ -16,20 +16,48 @@
          <div class="logo">СпецСинтез Админ</div>
          <nav>
             <ul>
-               <li><a href="/admin">Главная</a></li>
-               <li><a href="/admin/news">Новости</a></li>
-               <li><a href="/admin/categories">Категории</a></li>
-               <li><a href="/admin/products">Товары</a></li>
-               <li><a href="/admin/package-types">Типы упаковок</a></li>
-               <li><a href="/admin/logout">Выйти</a></li>
+               <li><a href="/admin" class="<%= currentSection === 'dashboard' ? 'active' : '' %>">📊 Главная</a></li>
+               <li><a href="/admin/news" class="<%= currentSection === 'news' ? 'active' : '' %>">📰 Новости</a></li>
+               <li><a href="/admin/categories" class="<%= currentSection === 'categories' ? 'active' : '' %>">🗂️
+                     Категории</a></li>
+               <li><a href="/admin/products" class="<%= currentSection === 'products' ? 'active' : '' %>">📦 Товары</a>
+               </li>
+               <li><a href="/admin/package-types" class="<%= currentSection === 'package-types' ? 'active' : '' %>">🏷️
+                     Типы упаковок</a></li>
+               <li><a href="/" target="_blank">🌐 На сайт</a></li>
+               <li><a href="/admin/logout" id="logout-link">🚪 Выйти</a></li>
             </ul>
          </nav>
       </aside>
       <main class="admin-content">
-         <%- body %>
+         <% if (typeof successMessage !=='undefined' && successMessage) { %>
+            <div class="alert alert-success">
+               <%= successMessage %>
+            </div>
+            <% } %>
+               <% if (typeof errorMessage !=='undefined' && errorMessage) { %>
+                  <div class="alert alert-error">
+                     <%= errorMessage %>
+                  </div>
+                  <% } %>
+                     <%- body %>
       </main>
    </div>
-   <script src="/admin/js/admin.js"></script>
+   <script nonce="<%= nonce %>">
+      document.addEventListener('DOMContentLoaded', function () {
+         // Подтверждение выхода
+         document.getElementById('logout-link').addEventListener('click', function (e) {
+            if (!confirm('Выйти из админ-панели?')) e.preventDefault();
+         });
+
+         // Подтверждение удаления для всех форм с action="/admin/.../delete"
+         document.querySelectorAll('form[action*="/delete"]').forEach(form => {
+            form.addEventListener('submit', function (e) {
+               if (!confirm('Вы уверены, что хотите удалить?')) e.preventDefault();
+            });
+         });
+      });
+   </script>
 </body>
 
 </html>

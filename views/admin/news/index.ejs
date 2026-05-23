@@ -1,25 +1,35 @@
 <h1>Новости</h1>
 <a href="/admin/news/create" class="btn">+ Создать новость</a>
+
 <table class="data-table">
-    <thead>
-        <tr><th>ID</th><th>Заголовок</th><th>Slug</th><th>Дата</th><th>Активна</th><th>Hero</th><th>Действия</th></tr>
-    </thead>
-    <tbody>
-        <% news.forEach(n => { %>
-        <tr>
+   <thead>
+      <tr>
+         <th>ID</th>
+         <th>Заголовок</th>
+         <th>Slug</th>
+         <th>Дата</th>
+         <th>Активна</th>
+         <th>Hero</th>
+         <th>Действия</th>
+      </tr>
+   </thead>
+   <tbody>
+      <% news.forEach(n => { %>
+         <tr>
             <td><%= n.id %></td>
             <td><%= n.title %></td>
             <td><%= n.slug %></td>
             <td><%= n.published_at ? new Date(n.published_at).toLocaleDateString() : '' %></td>
             <td><%= n.is_active ? '✅' : '❌' %></td>
             <td><%= n.is_hero ? '⭐' : '' %></td>
-            <td>
-                <a href="/admin/news/<%= n.id %>/edit">✏️</a>
-                <form method="POST" action="/admin/news/<%= n.id %>/delete" style="display:inline;" onsubmit="return confirm('Удалить новость?')">
-                    <button type="submit" class="btn-small btn-danger">🗑️</button>
-                </form>
+            <td class="actions">
+               <a href="/admin/news/<%= n.id %>/edit" class="btn-small">✏️</a>
+               <form method="POST" action="/admin/news/<%= n.id %>/delete" style="display:inline;">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <button type="submit" class="btn-small btn-danger">🗑️</button>
+               </form>
             </td>
-        </tr>
-        <% }); %>
-    </tbody>
+         </tr>
+      <% }); %>
+   </tbody>
 </table>

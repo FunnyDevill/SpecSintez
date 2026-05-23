@@ -1,41 +1,212 @@
-<h1>
-   <%= news ? 'Редактирование новости' : 'Создание новости' %>
-</h1>
-<form method="POST" action="<%= action %>">
-   <label>Заголовок *</label>
-   <input type="text" name="title" value="<%= news ? news.title : '' %>" required>
+<% if (typeof errors !== 'undefined' && errors.length > 0) { %>
+  <div class="form-errors">
+    <strong>Ошибки:</strong>
+    <ul>
+      <% errors.forEach(err => { %>
+        <li><%= err %></li>
+      <% }); %>
+    </ul>
+  </div>
+<% } %>
 
-   <label>Slug (URL) *</label>
-   <input type="text" name="slug" value="<%= news ? news.slug : '' %>" required>
+<h1><%= news ? 'Редактирование новости' : 'Создание новости' %></h1>
 
-   <label>Краткое описание (excerpt)</label>
-   <textarea name="excerpt" rows="3"><%= news ? news.excerpt : '' %></textarea>
+<form method="POST" action="<%= action %>" enctype="multipart/form-data" id="news-form">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
-   <label>Полный текст (HTML)</label>
-   <textarea name="content" rows="10"><%= news ? news.content : '' %></textarea>
+  <fieldset>
+    <legend>Основные данные</legend>
+    <div class="form-row two-cols">
+      <div class="form-group">
+        <label for="title">Заголовок *</label>
+        <input type="text" id="title" name="title" value="<%= news ? news.title : '' %>" required>
+      </div>
+      <div class="form-group">
+        <label for="slug">URL-имя (slug) *</label>
+        <input type="text" id="slug" name="slug" value="<%= news ? news.slug : '' %>" required>
+        <small>Только латинские буквы, цифры и дефисы</small>
+      </div>
+    </div>
 
-   <label>Дата публикации</label>
-   <input type="date" name="published_at"
-      value="<%= news && news.published_at ? new Date(news.published_at).toISOString().slice(0,10) : '' %>">
+    <div class="form-group">
+      <label for="excerpt">Краткое описание (excerpt)</label>
+      <textarea id="excerpt" name="excerpt" rows="3"><%= news ? news.excerpt : '' %></textarea>
+    </div>
+  </fieldset>
 
-   <label>URL изображения</label>
-   <input type="text" name="image_url" value="<%= news ? news.image_url : '' %>" placeholder="/uploads/news/photo.jpg">
+  <fieldset>
+    <legend>Полный текст</legend>
+    <div id="quill-editor" style="height: 400px; margin-bottom: 20px;"></div>
+    <input type="hidden" name="content" id="content-hidden">
+  </fieldset>
 
-   <label>Meta Title</label>
-   <input type="text" name="meta_title" value="<%= news ? news.meta_title : '' %>">
+  <fieldset>
+    <legend>Изображение</legend>
+    <div class="form-group">
+      <label>Изображение новости</label>
+      <% if (news && news.image_url) { %>
+        <div class="current-image-block" style="margin-bottom: 10px;">
+          <img src="<%= news.image_url %>" alt="Текущее изображение" id="current-image-img" style="max-width: 300px; max-height: 200px; object-fit: contain; border: 1px solid #ddd; border-radius: 4px;">
+          <button type="button" id="remove-image-btn" class="btn-small btn-danger" style="margin-left: 10px;">✖ Удалить изображение</button>
+          <input type="hidden" name="remove_image" id="remove-image-flag" value="false">
+        </div>
+      <% } %>
 
-   <label>Meta Description</label>
-   <textarea name="meta_description" rows="2"><%= news ? news.meta_description : '' %></textarea>
+      <div class="image-upload-area" id="image-upload-area">
+        <input type="file" name="image" id="image-file-input" accept="image/*" style="display: none;">
+        <div class="upload-placeholder" id="image-placeholder">
+          <span>📷</span>
+          <p>Перетащите изображение сюда или нажмите для выбора</p>
+          <small>Поддерживаются JPG, PNG, WebP</small>
+        </div>
+        <img id="image-preview" class="image-preview" src="" alt="Предпросмотр" style="display: none;">
+      </div>
+      <small>Загрузите новое изображение или оставьте текущее.</small>
+    </div>
+  </fieldset>
 
-   <label>
-      <input type="checkbox" name="is_active" <%=news && news.is_active ? 'checked' : '' %>> Активна
-   </label>
-   <label>
-      <input type="checkbox" name="is_hero" <%=news && news.is_hero ? 'checked' : '' %>> Hero (главная новость)
-   </label>
+  <fieldset>
+    <legend>Публикация</legend>
+    <div class="form-row two-cols">
+      <div class="form-group">
+        <label for="published_at">Дата публикации</label>
+        <input type="date" id="published_at" name="published_at" value="<%= news && news.published_at ? new Date(news.published_at).toISOString().slice(0,10) : '' %>">
+      </div>
+    </div>
+    <div class="form-group checkbox-group">
+      <label>
+        <input type="checkbox" name="is_active" <%= news && news.is_active ? 'checked' : '' %>> Активна
+      </label>
+    </div>
+    <div class="form-group checkbox-group">
+      <label>
+        <input type="checkbox" name="is_hero" <%= news && news.is_hero ? 'checked' : '' %>> Hero (главная новость)
+      </label>
+    </div>
+  </fieldset>
 
-   <div style="margin-top: 20px;">
-      <button type="submit" class="btn">Сохранить</button>
-      <a href="/admin/news" class="btn-cancel">Отмена</a>
-   </div>
+  <fieldset>
+    <legend>SEO</legend>
+    <div class="form-group">
+      <label for="meta_title">Meta Title</label>
+      <input type="text" id="meta_title" name="meta_title" value="<%= news ? news.meta_title : '' %>">
+    </div>
+    <div class="form-group">
+      <label for="meta_description">Meta Description</label>
+      <textarea id="meta_description" name="meta_description" rows="2"><%= news ? news.meta_description : '' %></textarea>
+    </div>
+  </fieldset>
+
+  <div class="form-actions">
+    <button type="submit" class="btn">Сохранить</button>
+    <a href="/admin/news" class="btn-cancel">Отмена</a>
+  </div>
 </form>
+
+<!-- Quill локально -->
+<link rel="stylesheet" href="/quill/quill.snow.css">
+<script src="/quill/quill.js" nonce="<%= nonce %>"></script>
+
+<script nonce="<%= nonce %>">
+  document.addEventListener('DOMContentLoaded', function () {
+    var quill = new Quill('#quill-editor', {
+      theme: 'snow',
+      placeholder: 'Введите полный текст новости...',
+      modules: {
+        toolbar: [
+          ['bold', 'italic', 'underline'],
+          [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+          ['clean']
+        ]
+      }
+    });
+
+    var existingContent = <%- news && news.content ? JSON.stringify(news.content) : '""' %>;
+    if (existingContent && existingContent !== '""' && existingContent !== '') {
+      try {
+        var delta = quill.clipboard.convert(existingContent.replace(/^"|"$/g, ''));
+        quill.setContents(delta, 'silent');
+      } catch (e) {
+        quill.root.innerHTML = existingContent.replace(/^"|"$/g, '');
+      }
+    }
+
+    var form = document.getElementById('news-form');
+    var hiddenContent = document.getElementById('content-hidden');
+    form.addEventListener('submit', function () {
+      hiddenContent.value = quill.root.innerHTML;
+    });
+
+    var titleInput = document.getElementById('title');
+    var slugInput = document.getElementById('slug');
+    var slugManual = false;
+
+    titleInput.addEventListener('input', function() {
+      if (!slugManual && slugInput) {
+        slugInput.value = this.value
+          .toString()
+          .toLowerCase()
+          .trim()
+          .replace(/\s+/g, '-')
+          .replace(/[^\w\-]+/g, '')
+          .replace(/\-\-+/g, '-')
+          .replace(/^-+|-+$/g, '');
+      }
+    });
+
+    slugInput.addEventListener('input', function() {
+      slugManual = true;
+    });
+
+    var uploadArea = document.getElementById('image-upload-area');
+    var fileInput = document.getElementById('image-file-input');
+    var placeholder = document.getElementById('image-placeholder');
+    var newPreview = document.getElementById('image-preview');
+    var currentImg = document.getElementById('current-image-img');
+    var removeBtn = document.getElementById('remove-image-btn');
+    var removeFlag = document.getElementById('remove-image-flag');
+
+    uploadArea.addEventListener('click', function(e) {
+      if (e.target !== removeBtn) fileInput.click();
+    });
+
+    fileInput.addEventListener('change', function() {
+      if (fileInput.files.length > 0) handleFile(fileInput.files[0]);
+    });
+
+    uploadArea.addEventListener('dragover', function(e) { e.preventDefault(); uploadArea.classList.add('dragover'); });
+    uploadArea.addEventListener('dragleave', function() { uploadArea.classList.remove('dragover'); });
+    uploadArea.addEventListener('drop', function(e) {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+    });
+
+    function handleFile(file) {
+      if (!file || !file.type.startsWith('image/')) {
+        alert('Пожалуйста, выберите изображение');
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        newPreview.src = e.target.result;
+        newPreview.style.display = 'block';
+        placeholder.style.display = 'none';
+        if (removeBtn) {
+          removeBtn.style.display = 'none';
+          removeFlag.value = 'false';
+        }
+        if (currentImg) currentImg.style.display = 'none';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    if (removeBtn) {
+      removeBtn.addEventListener('click', function() {
+        if (currentImg) currentImg.style.display = 'none';
+        removeBtn.style.display = 'none';
+        removeFlag.value = 'true';
+      });
+    }
+  });
+</script>

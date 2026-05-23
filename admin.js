@@ -7,12 +7,15 @@ const ejs = require('ejs');
 module.exports = (upload) => {
    const router = express.Router();
 
-   // Вспомогательная функция для рендеринга вложенного содержимого
-   const renderBody = async (viewPath, data) => {
-      return await ejs.renderFile(path.join(__dirname, 'views', viewPath), data);
-   };
+   // renderBody теперь автоматически добавляет csrfToken
+const renderBody = async (viewPath, data, req) => {
+   const csrfToken = (typeof req.csrfToken === 'function') ? req.csrfToken() : '';
+   const nonce = req.nonce || '';
+   const mergedData = { ...data, csrfToken, nonce };
+   return await ejs.renderFile(path.join(__dirname, 'views', viewPath), mergedData);
+};
 
-   // =================== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ КАТЕГОРИЙ С УРОВНЕМ ===================
+   // =================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===================
    async function getCategoriesWithLevel() {
       const result = await pool.query(`
          WITH RECURSIVE cat_tree AS (
@@ -37,14 +40,71 @@ module.exports = (upload) => {
       return result.rows;
    }
 
+   function buildProductFilter(search, sort, order, page, limit = 20) {
+      let where = '';
+      const params = [];
+      if (search && search.trim() !== '') {
+         where = `WHERE (p.name ILIKE $1 OR p.slug ILIKE $1)`;
+         params.push(`%${search.trim()}%`);
+      }
+
+      const allowedSortFields = ['name', 'slug', 'sort_order', 'id'];
+      const sortField = allowedSortFields.includes(sort) ? sort : 'id';
+      const sortOrder = order === 'desc' ? 'DESC' : 'ASC';
+
+      const offset = ((page || 1) - 1) * limit;
+
+      const query = `
+         SELECT p.*, c.name as category_name
+         FROM products p
+         LEFT JOIN categories c ON p.category_id = c.id
+         ${where}
+         ORDER BY ${sortField} ${sortOrder}
+         LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+      `;
+      const countQuery = `SELECT COUNT(*) FROM products p ${where}`;
+
+      return { query, countQuery, params: [...params, limit, offset] };
+   }
+
+   async function isSlugUnique(slug, excludeProductId = null) {
+      let res;
+      if (excludeProductId) {
+         res = await pool.query('SELECT id FROM products WHERE slug = $1 AND id != $2', [slug, excludeProductId]);
+      } else {
+         res = await pool.query('SELECT id FROM products WHERE slug = $1', [slug]);
+      }
+      return res.rows.length === 0;
+   }
+
+   async function isCategorySlugUnique(slug, excludeCategoryId = null) {
+      let res;
+      if (excludeCategoryId) {
+         res = await pool.query('SELECT id FROM categories WHERE slug = $1 AND id != $2', [slug, excludeCategoryId]);
+      } else {
+         res = await pool.query('SELECT id FROM categories WHERE slug = $1', [slug]);
+      }
+      return res.rows.length === 0;
+   }
+
+   async function isNewsSlugUnique(slug, excludeNewsId = null) {
+      let res;
+      if (excludeNewsId) {
+         res = await pool.query('SELECT id FROM news WHERE slug = $1 AND id != $2', [slug, excludeNewsId]);
+      } else {
+         res = await pool.query('SELECT id FROM news WHERE slug = $1', [slug]);
+      }
+      return res.rows.length === 0;
+   }
+
    // =================== ГЛАВНАЯ ===================
    router.get('/', async (req, res) => {
       try {
          const newsCount = (await pool.query('SELECT COUNT(*) FROM news')).rows[0].count;
          const prodCount = (await pool.query('SELECT COUNT(*) FROM products')).rows[0].count;
          const catCount = (await pool.query('SELECT COUNT(*) FROM categories')).rows[0].count;
-         const body = await renderBody('admin/index.ejs', { newsCount, prodCount, catCount });
-         res.render('admin/layout', { title: 'Главная', body });
+         const body = await renderBody('admin/index.ejs', { newsCount, prodCount, catCount }, req);
+         res.render('admin/layout', { title: 'Главная', body, currentSection: 'dashboard' });
       } catch (err) {
          console.error(err);
          res.status(500).send('Ошибка загрузки статистики');
@@ -55,8 +115,8 @@ module.exports = (upload) => {
    router.get('/news', async (req, res) => {
       try {
          const news = await pool.query('SELECT * FROM news ORDER BY published_at DESC');
-         const body = await renderBody('admin/news/index.ejs', { news: news.rows });
-         res.render('admin/layout', { title: 'Новости', body });
+         const body = await renderBody('admin/news/index.ejs', { news: news.rows }, req);
+         res.render('admin/layout', { title: 'Новости', body, currentSection: 'news' });
       } catch (err) {
          console.error(err);
          res.status(500).send('Ошибка загрузки новостей');
@@ -64,24 +124,50 @@ module.exports = (upload) => {
    });
 
    router.get('/news/create', async (req, res) => {
-      const body = await renderBody('admin/news/form.ejs', { news: null, action: '/admin/news/create' });
-      res.render('admin/layout', { title: 'Создание новости', body });
+      const body = await renderBody('admin/news/form.ejs', {
+         news: null,
+         action: '/admin/news/create',
+         errors: []
+      }, req);
+      res.render('admin/layout', { title: 'Создание новости', body, currentSection: 'news' });
    });
 
-   router.post('/news/create', async (req, res) => {
+   router.post('/news/create', upload.single('image'), async (req, res) => {
       try {
-         const { title, slug, excerpt, content, published_at, image_url, meta_title, meta_description, is_active, is_hero } = req.body;
+         const { title, slug, excerpt, content, published_at, meta_title, meta_description, is_active, is_hero } = req.body;
+         const errors = [];
+
+         if (!title || !title.trim()) errors.push('Заголовок обязателен');
+         if (!slug || !slug.trim()) errors.push('Slug обязателен');
+         else if (!/^[a-z0-9\-]+$/.test(slug)) errors.push('Slug может содержать только латинские буквы, цифры и дефисы');
+
+         if (slug && slug.trim() && errors.length === 0) {
+            const unique = await isNewsSlugUnique(slug.trim());
+            if (!unique) errors.push('Новость с таким slug уже существует');
+         }
+
+         if (errors.length > 0) {
+            const body = await renderBody('admin/news/form.ejs', {
+               news: req.body,
+               errors,
+               action: '/admin/news/create'
+            }, req);
+            return res.render('admin/layout', { title: 'Создание новости', body, currentSection: 'news' });
+         }
+
+         let image_url = null;
+         if (req.file) image_url = `/uploads/${req.file.filename}`;
          const active = (is_active === 'on' || is_active === true || is_active === 'true');
          const hero = (is_hero === 'on' || is_hero === true || is_hero === 'true');
          await pool.query(
             `INSERT INTO news (title, slug, excerpt, content, published_at, image_url, meta_title, meta_description, is_active, is_hero)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-            [title, slug, excerpt, content, published_at, image_url, meta_title, meta_description, active, hero]
+            [title.trim(), slug.trim(), excerpt, content, published_at, image_url, meta_title, meta_description, active, hero]
          );
          res.redirect('/admin/news');
       } catch (err) {
          console.error(err);
-         res.status(500).send('Ошибка сохранения новости');
+         res.status(500).send('Ошибка сохранения');
       }
    });
 
@@ -89,23 +175,70 @@ module.exports = (upload) => {
       try {
          const result = await pool.query('SELECT * FROM news WHERE id = $1', [req.params.id]);
          if (result.rows.length === 0) return res.status(404).send('Новость не найдена');
-         const body = await renderBody('admin/news/form.ejs', { news: result.rows[0], action: `/admin/news/${req.params.id}/edit` });
-         res.render('admin/layout', { title: 'Редактирование новости', body });
+         const body = await renderBody('admin/news/form.ejs', {
+            news: result.rows[0],
+            action: `/admin/news/${req.params.id}/edit`,
+            errors: []
+         }, req);
+         res.render('admin/layout', { title: 'Редактирование новости', body, currentSection: 'news' });
       } catch (err) {
          console.error(err);
          res.status(500).send('Ошибка загрузки');
       }
    });
 
-   router.post('/news/:id/edit', async (req, res) => {
+   router.post('/news/:id/edit', upload.single('image'), async (req, res) => {
       try {
-         const { title, slug, excerpt, content, published_at, image_url, meta_title, meta_description, is_active, is_hero } = req.body;
+         const { title, slug, excerpt, content, published_at, meta_title, meta_description, is_active, is_hero, remove_image } = req.body;
+         const id = req.params.id;
+         const errors = [];
+
+         if (!title || !title.trim()) errors.push('Заголовок обязателен');
+         if (!slug || !slug.trim()) errors.push('Slug обязателен');
+         else if (!/^[a-z0-9\-]+$/.test(slug)) errors.push('Slug может содержать только латинские буквы, цифры и дефисы');
+
+         if (slug && slug.trim() && errors.length === 0) {
+            const unique = await isNewsSlugUnique(slug.trim(), id);
+            if (!unique) errors.push('Новость с таким slug уже существует');
+         }
+
+         if (errors.length > 0) {
+            const oldNews = await pool.query('SELECT * FROM news WHERE id = $1', [id]);
+            const body = await renderBody('admin/news/form.ejs', {
+               news: { ...oldNews.rows[0], ...req.body },
+               errors,
+               action: `/admin/news/${id}/edit`
+            }, req);
+            return res.render('admin/layout', { title: 'Редактирование новости', body, currentSection: 'news' });
+         }
+
+         const old = await pool.query('SELECT image_url FROM news WHERE id = $1', [id]);
+         const oldImage = old.rows[0]?.image_url;
+         let image_url = oldImage;
+
+         if (remove_image === 'true') {
+            if (oldImage) {
+               try {
+                  const filePath = path.join(__dirname, '..', 'public', oldImage);
+                  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+               } catch (e) { console.error('Ошибка удаления изображения:', e); }
+            }
+            image_url = null;
+         } else if (req.file) {
+            if (oldImage) {
+               try {
+                  const filePath = path.join(__dirname, '..', 'public', oldImage);
+                  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+               } catch (e) { console.error('Ошибка удаления старого изображения:', e); }
+            }
+            image_url = `/uploads/${req.file.filename}`;
+         }
+
          const active = (is_active === 'on' || is_active === true || is_active === 'true');
          const hero = (is_hero === 'on' || is_hero === true || is_hero === 'true');
          await pool.query(
-            `UPDATE news SET title=$1, slug=$2, excerpt=$3, content=$4, published_at=$5, image_url=$6, meta_title=$7, meta_description=$8, is_active=$9, is_hero=$10
-             WHERE id=$11`,
-            [title, slug, excerpt, content, published_at, image_url, meta_title, meta_description, active, hero, req.params.id]
+            `UPDATE news SET title=$1, slug=$2, excerpt=$3, content=$4, published_at=$5, image_url=$6, meta_title=$7, meta_description=$8, is_active=$9, is_hero=$10 WHERE id=$11`,
+            [title.trim(), slug.trim(), excerpt, content, published_at, image_url, meta_title, meta_description, active, hero, id]
          );
          res.redirect('/admin/news');
       } catch (err) {
@@ -148,10 +281,10 @@ module.exports = (upload) => {
                 INNER JOIN cat_tree ct ON c.parent_id = ct.id
             )
             SELECT * FROM cat_tree ORDER BY path
-        `);
+         `);
          const allCats = await pool.query('SELECT id, name FROM categories ORDER BY name');
-         const body = await renderBody('admin/categories/index.ejs', { categories: result.rows, allCategories: allCats.rows });
-         res.render('admin/layout', { title: 'Категории', body });
+         const body = await renderBody('admin/categories/index.ejs', { categories: result.rows, allCategories: allCats.rows }, req);
+         res.render('admin/layout', { title: 'Категории', body, currentSection: 'categories' });
       } catch (err) {
          console.error(err);
          res.status(500).send('Ошибка загрузки категорий');
@@ -160,17 +293,46 @@ module.exports = (upload) => {
 
    router.get('/categories/create', async (req, res) => {
       const parents = await pool.query('SELECT id, name FROM categories ORDER BY name');
-      const body = await renderBody('admin/categories/form.ejs', { category: null, action: '/admin/categories/create', parents: parents.rows });
-      res.render('admin/layout', { title: 'Создание категории', body });
+      const body = await renderBody('admin/categories/form.ejs', {
+         category: null,
+         action: '/admin/categories/create',
+         parents: parents.rows,
+         errors: []
+      }, req);
+      res.render('admin/layout', { title: 'Создание категории', body, currentSection: 'categories' });
    });
 
-   router.post('/categories/create', async (req, res) => {
+   router.post('/categories/create', upload.single('icon'), async (req, res) => {
       try {
-         const { name, slug, parent_id, sort_order, description, image_url, is_active, icon_svg } = req.body;
+         const { name, slug, parent_id, sort_order, description, is_active } = req.body;
+         const errors = [];
+
+         if (!name || !name.trim()) errors.push('Название обязательно');
+         if (!slug || !slug.trim()) errors.push('Slug обязателен');
+         else if (!/^[a-z0-9\-]+$/.test(slug)) errors.push('Slug может содержать только латинские буквы, цифры и дефисы');
+
+         if (slug && slug.trim() && errors.length === 0) {
+            const unique = await isCategorySlugUnique(slug.trim());
+            if (!unique) errors.push('Категория с таким slug уже существует');
+         }
+
+         if (errors.length > 0) {
+            const parents = await pool.query('SELECT id, name FROM categories ORDER BY name');
+            const body = await renderBody('admin/categories/form.ejs', {
+               category: req.body,
+               errors,
+               action: '/admin/categories/create',
+               parents: parents.rows
+            }, req);
+            return res.render('admin/layout', { title: 'Создание категории', body, currentSection: 'categories' });
+         }
+
+         let icon_svg = null;
+         if (req.file) icon_svg = `/uploads/${req.file.filename}`;
          await pool.query(
             `INSERT INTO categories (name, slug, parent_id, sort_order, description, image_url, is_active, icon_svg)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-            [name, slug, parent_id || null, sort_order || 0, description, image_url, is_active === 'on', icon_svg]
+            [name.trim(), slug.trim(), parent_id || null, sort_order || 0, description, null, is_active === 'on', icon_svg]
          );
          res.redirect('/admin/categories');
       } catch (err) {
@@ -184,21 +346,71 @@ module.exports = (upload) => {
          const cat = await pool.query('SELECT * FROM categories WHERE id = $1', [req.params.id]);
          if (cat.rows.length === 0) return res.status(404).send('Категория не найдена');
          const parents = await pool.query('SELECT id, name FROM categories WHERE id != $1 ORDER BY name', [req.params.id]);
-         const body = await renderBody('admin/categories/form.ejs', { category: cat.rows[0], action: `/admin/categories/${req.params.id}/edit`, parents: parents.rows });
-         res.render('admin/layout', { title: 'Редактирование категории', body });
+         const body = await renderBody('admin/categories/form.ejs', {
+            category: cat.rows[0],
+            action: `/admin/categories/${req.params.id}/edit`,
+            parents: parents.rows,
+            errors: []
+         }, req);
+         res.render('admin/layout', { title: 'Редактирование категории', body, currentSection: 'categories' });
       } catch (err) {
          console.error(err);
          res.status(500).send('Ошибка загрузки');
       }
    });
 
-   router.post('/categories/:id/edit', async (req, res) => {
+   router.post('/categories/:id/edit', upload.single('icon'), async (req, res) => {
       try {
-         const { name, slug, parent_id, sort_order, description, image_url, is_active, icon_svg } = req.body;
+         const { name, slug, parent_id, sort_order, description, is_active, remove_icon } = req.body;
+         const id = req.params.id;
+         const errors = [];
+
+         if (!name || !name.trim()) errors.push('Название обязательно');
+         if (!slug || !slug.trim()) errors.push('Slug обязателен');
+         else if (!/^[a-z0-9\-]+$/.test(slug)) errors.push('Slug может содержать только латинские буквы, цифры и дефисы');
+
+         if (slug && slug.trim() && errors.length === 0) {
+            const unique = await isCategorySlugUnique(slug.trim(), id);
+            if (!unique) errors.push('Категория с таким slug уже существует');
+         }
+
+         if (errors.length > 0) {
+            const parents = await pool.query('SELECT id, name FROM categories WHERE id != $1 ORDER BY name', [id]);
+            const cat = await pool.query('SELECT * FROM categories WHERE id = $1', [id]);
+            const body = await renderBody('admin/categories/form.ejs', {
+               category: { ...cat.rows[0], ...req.body },
+               errors,
+               action: `/admin/categories/${id}/edit`,
+               parents: parents.rows
+            }, req);
+            return res.render('admin/layout', { title: 'Редактирование категории', body, currentSection: 'categories' });
+         }
+
+         const old = await pool.query('SELECT icon_svg FROM categories WHERE id = $1', [id]);
+         const oldIcon = old.rows[0]?.icon_svg;
+         let icon_svg = oldIcon;
+
+         if (remove_icon === 'true') {
+            if (oldIcon) {
+               try {
+                  const filePath = path.join(__dirname, '..', 'public', oldIcon);
+                  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+               } catch (e) { console.error('Ошибка удаления иконки:', e); }
+            }
+            icon_svg = null;
+         } else if (req.file) {
+            if (oldIcon) {
+               try {
+                  const filePath = path.join(__dirname, '..', 'public', oldIcon);
+                  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+               } catch (e) { console.error('Ошибка удаления старой иконки:', e); }
+            }
+            icon_svg = `/uploads/${req.file.filename}`;
+         }
+
          await pool.query(
-            `UPDATE categories SET name=$1, slug=$2, parent_id=$3, sort_order=$4, description=$5, image_url=$6, is_active=$7, icon_svg=$8
-             WHERE id=$9`,
-            [name, slug, parent_id || null, sort_order || 0, description, image_url, is_active === 'on', icon_svg, req.params.id]
+            `UPDATE categories SET name=$1, slug=$2, parent_id=$3, sort_order=$4, description=$5, image_url=$6, is_active=$7, icon_svg=$8 WHERE id=$9`,
+            [name.trim(), slug.trim(), parent_id || null, sort_order || 0, description, null, is_active === 'on', icon_svg, id]
          );
          res.redirect('/admin/categories');
       } catch (err) {
@@ -229,14 +441,24 @@ module.exports = (upload) => {
    // =================== ТОВАРЫ ===================
    router.get('/products', async (req, res) => {
       try {
-         const products = await pool.query(`
-            SELECT p.*, c.name as category_name 
-            FROM products p
-            LEFT JOIN categories c ON p.category_id = c.id
-            ORDER BY p.sort_order, p.id
-         `);
-         const body = await renderBody('admin/products/index.ejs', { products: products.rows });
-         res.render('admin/layout', { title: 'Товары', body });
+         const { search, sort, order, page } = req.query;
+         const currentPage = parseInt(page, 10) || 1;
+         const { query, countQuery, params } = buildProductFilter(search, sort, order, currentPage);
+
+         const products = await pool.query(query, params);
+         const totalResult = await pool.query(countQuery, params.slice(0, params.length - 2));
+         const totalProducts = parseInt(totalResult.rows[0].count, 10);
+         const totalPages = Math.ceil(totalProducts / 20);
+
+         const body = await renderBody('admin/products/index.ejs', {
+            products: products.rows,
+            currentSearch: search || '',
+            sortField: sort || 'id',
+            sortOrder: order || 'asc',
+            currentPage,
+            totalPages,
+         }, req);
+         res.render('admin/layout', { title: 'Товары', body, currentSection: 'products' });
       } catch (err) {
          console.error(err);
          res.status(500).send('Ошибка загрузки товаров');
@@ -249,22 +471,45 @@ module.exports = (upload) => {
          product: null,
          action: '/admin/products/create',
          categories: categories,
-         selectedCategories: []
-      });
-      res.render('admin/layout', { title: 'Создание товара', body });
+         selectedCategories: [],
+         errors: []
+      }, req);
+      res.render('admin/layout', { title: 'Создание товара', body, currentSection: 'products' });
    });
 
    router.post('/products/create', async (req, res) => {
       try {
-         const { name, slug, excerpt, description, image_url, category_id, sort_order, is_active } = req.body;
+         const { name, slug, excerpt, description, category_id, sort_order, is_active } = req.body;
+         const errors = [];
+
+         if (!name || !name.trim()) errors.push('Название обязательно');
+         if (!slug || !slug.trim()) errors.push('Slug обязателен');
+         else if (!/^[a-z0-9\-]+$/.test(slug)) errors.push('Slug может содержать только латинские буквы, цифры и дефисы');
+
+         if (slug && slug.trim() && errors.length === 0) {
+            const unique = await isSlugUnique(slug.trim());
+            if (!unique) errors.push('Товар с таким slug уже существует');
+         }
+
+         if (errors.length > 0) {
+            const categories = await getCategoriesWithLevel();
+            const body = await renderBody('admin/products/form.ejs', {
+               product: req.body,
+               errors,
+               action: '/admin/products/create',
+               categories,
+               selectedCategories: req.body.categories || []
+            }, req);
+            return res.render('admin/layout', { title: 'Создание товара', body, currentSection: 'products' });
+         }
+
          const result = await pool.query(
             `INSERT INTO products (name, slug, excerpt, description, image_url, category_id, sort_order, is_active)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-            [name, slug, excerpt, description, image_url, category_id || null, sort_order || 0, is_active === 'on']
+            [name.trim(), slug.trim(), excerpt, description, null, category_id || null, sort_order || 0, is_active === 'on']
          );
          const productId = result.rows[0].id;
 
-         // Сохраняем выбранные отрасли (многие ко многим)
          let categoryIds = [];
          if (req.body.categories) {
             categoryIds = Array.isArray(req.body.categories) ? req.body.categories : [req.body.categories];
@@ -274,7 +519,6 @@ module.exports = (upload) => {
                await pool.query('INSERT INTO product_categories (product_id, category_id) VALUES ($1, $2)', [productId, catId]);
             }
          }
-
          res.redirect(`/admin/products/${productId}/edit`);
       } catch (err) {
          console.error(err);
@@ -293,9 +537,10 @@ module.exports = (upload) => {
             product: product.rows[0],
             action: `/admin/products/${req.params.id}/edit`,
             categories: allCategories,
-            selectedCategories: selectedCategories
-         });
-         res.render('admin/layout', { title: 'Редактирование товара', body });
+            selectedCategories: selectedCategories,
+            errors: []
+         }, req);
+         res.render('admin/layout', { title: 'Редактирование товара', body, currentSection: 'products' });
       } catch (err) {
          console.error(err);
          res.status(500).send('Ошибка загрузки');
@@ -304,11 +549,36 @@ module.exports = (upload) => {
 
    router.post('/products/:id/edit', async (req, res) => {
       try {
-         const { name, slug, excerpt, description, image_url, category_id, sort_order, is_active } = req.body;
+         const { name, slug, excerpt, description, category_id, sort_order, is_active } = req.body;
+         const errors = [];
+
+         if (!name || !name.trim()) errors.push('Название обязательно');
+         if (!slug || !slug.trim()) errors.push('Slug обязателен');
+         else if (!/^[a-z0-9\-]+$/.test(slug)) errors.push('Slug может содержать только латинские буквы, цифры и дефисы');
+
+         if (slug && slug.trim() && errors.length === 0) {
+            const unique = await isSlugUnique(slug.trim(), req.params.id);
+            if (!unique) errors.push('Товар с таким slug уже существует');
+         }
+
+         if (errors.length > 0) {
+            const allCategories = await getCategoriesWithLevel();
+            const selectedCategoriesRes = await pool.query('SELECT category_id FROM product_categories WHERE product_id = $1', [req.params.id]);
+            const selectedCategories = selectedCategoriesRes.rows.map(row => row.category_id);
+            const product = await pool.query('SELECT * FROM products WHERE id = $1', [req.params.id]);
+            const body = await renderBody('admin/products/form.ejs', {
+               product: { ...product.rows[0], ...req.body },
+               errors,
+               action: `/admin/products/${req.params.id}/edit`,
+               categories: allCategories,
+               selectedCategories
+            }, req);
+            return res.render('admin/layout', { title: 'Редактирование товара', body, currentSection: 'products' });
+         }
+
          await pool.query(
-            `UPDATE products SET name=$1, slug=$2, excerpt=$3, description=$4, image_url=$5, category_id=$6, sort_order=$7, is_active=$8
-             WHERE id=$9`,
-            [name, slug, excerpt, description, image_url, category_id || null, sort_order || 0, is_active === 'on', req.params.id]
+            `UPDATE products SET name=$1, slug=$2, excerpt=$3, description=$4, category_id=$5, sort_order=$6, is_active=$7 WHERE id=$8`,
+            [name.trim(), slug.trim(), excerpt, description, category_id || null, sort_order || 0, is_active === 'on', req.params.id]
          );
 
          await pool.query('DELETE FROM product_categories WHERE product_id = $1', [req.params.id]);
@@ -321,7 +591,6 @@ module.exports = (upload) => {
                await pool.query('INSERT INTO product_categories (product_id, category_id) VALUES ($1, $2)', [req.params.id, catId]);
             }
          }
-
          res.redirect('/admin/products');
       } catch (err) {
          console.error(err);
@@ -333,11 +602,14 @@ module.exports = (upload) => {
       try {
          const images = await pool.query('SELECT image_url FROM product_images WHERE product_id = $1', [req.params.id]);
          for (const img of images.rows) {
-            const filePath = path.join(__dirname, '..', 'public', img.image_url);
-            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+            try {
+               const filePath = path.join(__dirname, '..', 'public', img.image_url);
+               if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+            } catch (fileErr) {
+               console.error('Ошибка удаления файла изображения:', fileErr);
+            }
          }
          await pool.query('DELETE FROM product_images WHERE product_id = $1', [req.params.id]);
-         await pool.query('DELETE FROM product_options WHERE product_id = $1', [req.params.id]);
          await pool.query('DELETE FROM product_package_types WHERE product_id = $1', [req.params.id]);
          await pool.query('DELETE FROM product_categories WHERE product_id = $1', [req.params.id]);
          await pool.query('DELETE FROM products WHERE id = $1', [req.params.id]);
@@ -348,62 +620,46 @@ module.exports = (upload) => {
       }
    });
 
-   // =================== ИЗОБРАЖЕНИЯ ТОВАРА ===================
-   router.get('/products/:id/images', async (req, res) => {
+   // =================== ИЗОБРАЖЕНИЯ ТОВАРА (AJAX) ===================
+   router.get('/products/:id/images/list', async (req, res) => {
       try {
-         const product = await pool.query('SELECT id, name FROM products WHERE id = $1', [req.params.id]);
-         if (product.rows.length === 0) return res.status(404).send('Товар не найден');
-         const images = await pool.query(`
-            SELECT pi.*, pt.name as package_name 
-            FROM product_images pi
-            LEFT JOIN package_types pt ON pi.package_type_id = pt.id
-            WHERE pi.product_id = $1
-            ORDER BY pi.is_main DESC, pi.sort_order
-         `, [req.params.id]);
-         const packageTypes = await pool.query('SELECT id, name FROM package_types ORDER BY name');
-         const body = await renderBody('admin/products/images.ejs', { product: product.rows[0], images: images.rows, packageTypes: packageTypes.rows });
-         res.render('admin/layout', { title: `Изображения товара ${product.rows[0].name}`, body });
+         const images = await pool.query(
+            `SELECT id, image_url, is_main, sort_order FROM product_images WHERE product_id = $1 ORDER BY sort_order`,
+            [req.params.id]
+         );
+         res.json(images.rows);
       } catch (err) {
          console.error(err);
-         res.status(500).send('Ошибка загрузки');
+         res.status(500).json({ error: 'Ошибка загрузки изображений' });
       }
    });
 
-   router.post('/products/:id/upload-images', upload.array('images', 10), async (req, res) => {
+   router.post('/products/:id/images/upload', upload.array('images', 10), async (req, res) => {
       try {
          const productId = req.params.id;
          const files = req.files;
-         if (!files || files.length === 0) return res.status(400).send('Файлы не выбраны');
+         if (!files || files.length === 0) return res.status(400).json({ error: 'Файлы не выбраны' });
+
+         const mainCheck = await pool.query('SELECT id FROM product_images WHERE product_id = $1 AND is_main = true', [productId]);
+         let mainExists = mainCheck.rows.length > 0;
+
          for (let i = 0; i < files.length; i++) {
             const file = files[i];
             const fileUrl = `/uploads/${file.filename}`;
-            const existingMain = await pool.query('SELECT id FROM product_images WHERE product_id = $1 AND is_main = true', [productId]);
-            const isMain = (existingMain.rows.length === 0 && i === 0);
+            const isMain = !mainExists && i === 0;
             await pool.query(
-               `INSERT INTO product_images (product_id, image_url, is_main, sort_order) VALUES ($1, $2, $3, $4)`,
+               'INSERT INTO product_images (product_id, image_url, is_main, sort_order) VALUES ($1, $2, $3, $4)',
                [productId, fileUrl, isMain, i]
             );
+            if (isMain) {
+               mainExists = true;
+               await pool.query('UPDATE products SET image_url = $1 WHERE id = $2', [fileUrl, productId]);
+            }
          }
-         res.redirect(`/admin/products/${productId}/images`);
+         res.json({ success: true });
       } catch (err) {
          console.error(err);
-         res.status(500).send('Ошибка загрузки изображений');
-      }
-   });
-
-   router.post('/products/:productId/images/:imageId/delete', async (req, res) => {
-      try {
-         const { productId, imageId } = req.params;
-         const image = await pool.query('SELECT image_url FROM product_images WHERE id = $1 AND product_id = $2', [imageId, productId]);
-         if (image.rows.length) {
-            const filePath = path.join(__dirname, '..', 'public', image.rows[0].image_url);
-            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-         }
-         await pool.query('DELETE FROM product_images WHERE id = $1 AND product_id = $2', [imageId, productId]);
-         res.redirect(`/admin/products/${productId}/images`);
-      } catch (err) {
-         console.error(err);
-         res.status(500).send('Ошибка удаления изображения');
+         res.status(500).json({ error: 'Ошибка загрузки изображений' });
       }
    });
 
@@ -412,89 +668,49 @@ module.exports = (upload) => {
          const { productId, imageId } = req.params;
          await pool.query('UPDATE product_images SET is_main = false WHERE product_id = $1', [productId]);
          await pool.query('UPDATE product_images SET is_main = true WHERE id = $1 AND product_id = $2', [imageId, productId]);
-         res.redirect(`/admin/products/${productId}/images`);
+         const img = await pool.query('SELECT image_url FROM product_images WHERE id = $1', [imageId]);
+         if (img.rows.length) {
+            await pool.query('UPDATE products SET image_url = $1 WHERE id = $2', [img.rows[0].image_url, productId]);
+         }
+         res.json({ success: true });
       } catch (err) {
          console.error(err);
-         res.status(500).send('Ошибка установки главного изображения');
+         res.status(500).json({ error: 'Ошибка установки главного изображения' });
       }
    });
 
-   // =================== ОПЦИИ ТОВАРА ===================
-   router.get('/products/:id/options', async (req, res) => {
+   router.post('/products/:productId/images/:imageId/delete', async (req, res) => {
       try {
-         const product = await pool.query('SELECT id, name FROM products WHERE id = $1', [req.params.id]);
-         if (product.rows.length === 0) return res.status(404).send('Товар не найден');
-         const options = await pool.query('SELECT * FROM product_options WHERE product_id = $1 ORDER BY sort_order', [req.params.id]);
-         const body = await renderBody('admin/products/options.ejs', { product: product.rows[0], options: options.rows });
-         res.render('admin/layout', { title: `Опции товара ${product.rows[0].name}`, body });
-      } catch (err) {
-         console.error(err);
-         res.status(500).send('Ошибка загрузки');
-      }
-   });
-
-   router.post('/products/:id/options', upload.single('image'), async (req, res) => {
-      try {
-         const productId = req.params.id;
-         const { name } = req.body;
-         let imageUrl = null;
-         if (req.file) imageUrl = `/uploads/${req.file.filename}`;
-         await pool.query(
-            `INSERT INTO product_options (product_id, name, image_url, sort_order)
-             VALUES ($1, $2, $3, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM product_options WHERE product_id = $1))`,
-            [productId, name, imageUrl]
-         );
-         res.redirect(`/admin/products/${productId}/options`);
-      } catch (err) {
-         console.error(err);
-         res.status(500).send('Ошибка создания опции');
-      }
-   });
-
-   router.post('/products/:productId/options/:optionId/edit', upload.single('image'), async (req, res) => {
-      try {
-         const { productId, optionId } = req.params;
-         const { name } = req.body;
-         if (req.file) {
-            const old = await pool.query('SELECT image_url FROM product_options WHERE id = $1', [optionId]);
-            if (old.rows[0]?.image_url) {
-               const oldPath = path.join(__dirname, '..', 'public', old.rows[0].image_url);
-               if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+         const { productId, imageId } = req.params;
+         const image = await pool.query('SELECT image_url, is_main FROM product_images WHERE id = $1 AND product_id = $2', [imageId, productId]);
+         if (image.rows.length) {
+            try {
+               const filePath = path.join(__dirname, '..', 'public', image.rows[0].image_url);
+               if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+            } catch (e) { console.error('Ошибка удаления файла:', e); }
+            await pool.query('DELETE FROM product_images WHERE id = $1', [imageId]);
+            if (image.rows[0].is_main) {
+               await pool.query('UPDATE products SET image_url = NULL WHERE id = $1', [productId]);
+               const next = await pool.query('SELECT id, image_url FROM product_images WHERE product_id = $1 ORDER BY sort_order LIMIT 1', [productId]);
+               if (next.rows.length) {
+                  await pool.query('UPDATE product_images SET is_main = true WHERE id = $1', [next.rows[0].id]);
+                  await pool.query('UPDATE products SET image_url = $1 WHERE id = $2', [next.rows[0].image_url, productId]);
+               }
             }
-            const newUrl = `/uploads/${req.file.filename}`;
-            await pool.query('UPDATE product_options SET name = $1, image_url = $2 WHERE id = $3 AND product_id = $4', [name, newUrl, optionId, productId]);
-         } else {
-            await pool.query('UPDATE product_options SET name = $1 WHERE id = $2 AND product_id = $3', [name, optionId, productId]);
          }
-         res.redirect(`/admin/products/${productId}/options`);
+         res.json({ success: true });
       } catch (err) {
          console.error(err);
-         res.status(500).send('Ошибка обновления опции');
+         res.status(500).json({ error: 'Ошибка удаления' });
       }
    });
 
-   router.post('/products/:productId/options/:optionId/delete', async (req, res) => {
-      try {
-         const { productId, optionId } = req.params;
-         const imgRes = await pool.query('SELECT image_url FROM product_options WHERE id = $1', [optionId]);
-         if (imgRes.rows[0]?.image_url) {
-            const filePath = path.join(__dirname, '..', 'public', imgRes.rows[0].image_url);
-            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-         }
-         await pool.query('DELETE FROM product_options WHERE id = $1 AND product_id = $2', [optionId, productId]);
-         res.redirect(`/admin/products/${productId}/options`);
-      } catch (err) {
-         console.error(err);
-         res.status(500).send('Ошибка удаления опции');
-      }
-   });
-
-   // =================== ТИПЫ УПАКОВОК (справочник) ===================
+   // =================== ТИПЫ УПАКОВОК ===================
    router.get('/package-types', async (req, res) => {
       try {
-         const types = await pool.query('SELECT id, name, icon_url, sort_order FROM package_types ORDER BY sort_order');
-         const body = await renderBody('admin/package-types/index.ejs', { types: types.rows });
-         res.render('admin/layout', { title: 'Типы упаковок', body });
+         const types = await pool.query('SELECT id, name, icon_url FROM package_types ORDER BY name');
+         const body = await renderBody('admin/package-types/index.ejs', { types: types.rows }, req);
+         res.render('admin/layout', { title: 'Типы упаковок', body, currentSection: 'package-types' });
       } catch (err) {
          console.error(err);
          res.status(500).send('Ошибка загрузки');
@@ -502,16 +718,33 @@ module.exports = (upload) => {
    });
 
    router.get('/package-types/create', async (req, res) => {
-      const body = await renderBody('admin/package-types/form.ejs', { type: null, action: '/admin/package-types/create' });
-      res.render('admin/layout', { title: 'Создание типа упаковки', body });
+      const body = await renderBody('admin/package-types/form.ejs', {
+         type: null,
+         action: '/admin/package-types/create',
+         errors: []
+      }, req);
+      res.render('admin/layout', { title: 'Создание типа упаковки', body, currentSection: 'package-types' });
    });
 
-   router.post('/package-types/create', async (req, res) => {
+   router.post('/package-types/create', upload.single('icon'), async (req, res) => {
       try {
-         const { name, icon_url, sort_order } = req.body;
+         const { name } = req.body;
+         const errors = [];
+         if (!name || !name.trim()) errors.push('Название обязательно');
+         if (errors.length > 0) {
+            const body = await renderBody('admin/package-types/form.ejs', {
+               type: req.body,
+               errors,
+               action: '/admin/package-types/create'
+            }, req);
+            return res.render('admin/layout', { title: 'Создание типа упаковки', body, currentSection: 'package-types' });
+         }
+
+         let icon_url = null;
+         if (req.file) icon_url = `/uploads/${req.file.filename}`;
          await pool.query(
-            `INSERT INTO package_types (name, icon_url, sort_order) VALUES ($1, $2, $3)`,
-            [name, icon_url, sort_order || 0]
+            `INSERT INTO package_types (name, icon_url) VALUES ($1, $2)`,
+            [name.trim(), icon_url]
          );
          res.redirect('/admin/package-types');
       } catch (err) {
@@ -524,20 +757,59 @@ module.exports = (upload) => {
       try {
          const type = await pool.query('SELECT * FROM package_types WHERE id = $1', [req.params.id]);
          if (type.rows.length === 0) return res.status(404).send('Тип не найден');
-         const body = await renderBody('admin/package-types/form.ejs', { type: type.rows[0], action: `/admin/package-types/${req.params.id}/edit` });
-         res.render('admin/layout', { title: 'Редактирование типа упаковки', body });
+         const body = await renderBody('admin/package-types/form.ejs', {
+            type: type.rows[0],
+            action: `/admin/package-types/${req.params.id}/edit`,
+            errors: []
+         }, req);
+         res.render('admin/layout', { title: 'Редактирование типа упаковки', body, currentSection: 'package-types' });
       } catch (err) {
          console.error(err);
          res.status(500).send('Ошибка загрузки');
       }
    });
 
-   router.post('/package-types/:id/edit', async (req, res) => {
+   router.post('/package-types/:id/edit', upload.single('icon'), async (req, res) => {
       try {
-         const { name, icon_url, sort_order } = req.body;
+         const { name, remove_icon } = req.body;
+         const id = req.params.id;
+         const errors = [];
+         if (!name || !name.trim()) errors.push('Название обязательно');
+         if (errors.length > 0) {
+            const old = await pool.query('SELECT * FROM package_types WHERE id = $1', [id]);
+            const body = await renderBody('admin/package-types/form.ejs', {
+               type: { ...old.rows[0], ...req.body },
+               errors,
+               action: `/admin/package-types/${id}/edit`
+            }, req);
+            return res.render('admin/layout', { title: 'Редактирование типа упаковки', body, currentSection: 'package-types' });
+         }
+
+         const old = await pool.query('SELECT icon_url FROM package_types WHERE id = $1', [id]);
+         const oldIcon = old.rows[0]?.icon_url;
+         let icon_url = oldIcon;
+
+         if (remove_icon === 'true') {
+            if (oldIcon) {
+               try {
+                  const filePath = path.join(__dirname, '..', 'public', oldIcon);
+                  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+               } catch (e) { console.error('Ошибка удаления иконки:', e); }
+            }
+            icon_url = null;
+         } else if (req.file) {
+            if (oldIcon) {
+               try {
+                  const filePath = path.join(__dirname, '..', 'public', oldIcon);
+                  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+               } catch (e) { console.error('Ошибка удаления старой иконки:', e); }
+            }
+            icon_url = `/uploads/${req.file.filename}`;
+         }
+
          await pool.query(
-            `UPDATE package_types SET name=$1, icon_url=$2, sort_order=$3 WHERE id=$4`,
-            [name, icon_url, sort_order || 0, req.params.id]
+            `UPDATE package_types SET name=$1, icon_url=$2 WHERE id=$3`,
+            [name.trim(), icon_url, id]
          );
          res.redirect('/admin/package-types');
       } catch (err) {
@@ -548,13 +820,24 @@ module.exports = (upload) => {
 
    router.post('/package-types/:id/delete', async (req, res) => {
       try {
+         // Проверяем, используется ли тип упаковки в товарах (теперь без id)
          const used = await pool.query(
-            'SELECT id FROM product_package_types WHERE package_type_id = $1 LIMIT 1',
+            'SELECT 1 FROM product_package_types WHERE package_type_id = $1 LIMIT 1',
             [req.params.id]
          );
          if (used.rows.length > 0) {
             return res.status(400).send('Тип упаковки используется в товарах, сначала удалите связи');
          }
+
+         // Удаляем файл иконки, если есть
+         const type = await pool.query('SELECT icon_url FROM package_types WHERE id = $1', [req.params.id]);
+         if (type.rows[0]?.icon_url) {
+            try {
+               const filePath = path.join(__dirname, '..', 'public', type.rows[0].icon_url);
+               if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+            } catch (e) { console.error('Ошибка удаления иконки:', e); }
+         }
+
          await pool.query('DELETE FROM package_types WHERE id = $1', [req.params.id]);
          res.redirect('/admin/package-types');
       } catch (err) {
@@ -577,8 +860,8 @@ module.exports = (upload) => {
             product: product.rows[0],
             allTypes: allTypes.rows,
             selected: selected.rows
-         });
-         res.render('admin/layout', { title: `Типы упаковок для ${product.rows[0].name}`, body });
+         }, req);
+         res.render('admin/layout', { title: `Типы упаковок для ${product.rows[0].name}`, body, currentSection: 'products' });
       } catch (err) {
          console.error(err);
          res.status(500).send('Ошибка загрузки');
@@ -592,7 +875,6 @@ module.exports = (upload) => {
          if (req.body.package_type_ids) {
             ids = Array.isArray(req.body.package_type_ids) ? req.body.package_type_ids : [req.body.package_type_ids];
          }
-
          const volumesMap = {};
          for (const key in req.body) {
             if (key.startsWith('volume_')) {
@@ -600,9 +882,7 @@ module.exports = (upload) => {
                volumesMap[typeId] = req.body[key] ? req.body[key].trim() : '';
             }
          }
-
          await pool.query('DELETE FROM product_package_types WHERE product_id = $1', [productId]);
-
          for (const ptid of ids) {
             const volume = volumesMap[ptid] || '';
             await pool.query(
@@ -610,7 +890,6 @@ module.exports = (upload) => {
                [productId, ptid, volume]
             );
          }
-
          res.redirect(`/admin/products/${productId}/edit`);
       } catch (err) {
          console.error(err);

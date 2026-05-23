@@ -91,3 +91,51 @@ document.addEventListener('DOMContentLoaded', function () {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     });
 });
+
+// main.js – обработка всех форм обратной связи
+document.addEventListener('DOMContentLoaded', function () {
+  function setupFormAjax(formId) {
+    var form = document.getElementById(formId);
+    if (!form) return;
+    var messageDiv = document.createElement('div');
+    messageDiv.id = formId + '-message';
+    messageDiv.style.display = 'none';
+    messageDiv.style.padding = '1rem';
+    messageDiv.style.marginBottom = '1rem';
+    messageDiv.style.borderRadius = '8px';
+    form.parentNode.insertBefore(messageDiv, form);
+
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      messageDiv.style.display = 'none';
+      var formData = new FormData(form);
+      // Преобразуем FormData в URL-кодированную строку
+      var urlEncoded = new URLSearchParams(formData).toString();
+      try {
+        var res = await fetch(form.action, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: urlEncoded
+        });
+        var data = await res.json();
+        if (res.ok) {
+          messageDiv.style.display = 'block';
+          messageDiv.style.background = '#d4edda';
+          messageDiv.style.color = '#155724';
+          messageDiv.textContent = '✅ Спасибо! Ваша заявка отправлена.';
+          form.reset();
+        } else {
+          throw new Error(data.error || 'Ошибка сервера');
+        }
+      } catch (err) {
+        messageDiv.style.display = 'block';
+        messageDiv.style.background = '#f8d7da';
+        messageDiv.style.color = '#721c24';
+        messageDiv.textContent = '❌ ' + (err.message || 'Произошла ошибка');
+      }
+    });
+  }
+
+  setupFormAjax('contactForm');   // контрактная форма
+  setupFormAjax('ctaForm');       // CTA в футере
+});

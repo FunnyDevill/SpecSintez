@@ -1,75 +1,169 @@
-<h1><%= product ? 'Редактирование товара' : 'Создание товара' %></h1>
-
-<form method="POST" action="<%= action %>">
-   <label>Название *</label>
-   <input type="text" name="name" value="<%= product ? product.name : '' %>" required>
-
-   <label>Slug *</label>
-   <input type="text" name="slug" value="<%= product ? product.slug : '' %>" required>
-
-   <label>Краткое описание (excerpt)</label>
-   <textarea name="excerpt" rows="3"><%= product ? product.excerpt : '' %></textarea>
-
-   <label>Полное описание</label>
-   <div id="quill-editor" style="height: 400px; margin-bottom: 20px;"></div>
-   <input type="hidden" name="description" id="description-hidden">
-
-   <label>URL основного изображения</label>
-   <input type="text" name="image_url" value="<%= product ? product.image_url : '' %>">
-
-   <!-- Основная категория (для навигации) -->
-   <label>Основная категория</label>
-   <select name="category_id">
-      <option value="">— Без категории —</option>
-      <% categories.forEach(cat=> { %>
-         <option value="<%= cat.id %>" <%=product && product.category_id==cat.id ? 'selected' : '' %>><%= cat.name %></option>
+<% if (typeof errors !== 'undefined' && errors.length > 0) { %>
+  <div class="form-errors">
+    <strong>Ошибки:</strong>
+    <ul>
+      <% errors.forEach(err => { %>
+        <li><%= err %></li>
       <% }); %>
-   </select>
-
-   <!-- БЛОК ВЫБОРА ОТРАСЛЕЙ С ЧЕКБОКСАМИ И АВТО-ВЫБОРОМ РОДИТЕЛЕЙ -->
-   <label>Отрасли применения (можно выбрать несколько)</label>
-   <div class="categories-selector">
-      <% categories.forEach(cat=> { %>
-         <div class="category-item level-<%= cat.level %>">
-            <input type="checkbox" name="categories" value="<%= cat.id %>" class="category-checkbox"
-               <%= (selectedCategories && selectedCategories.includes(cat.id)) ? 'checked' : '' %>
-               data-parent-id="<%= cat.parent_id || '' %>">
-            <label class="category-label"><%= cat.name %></label>
-         </div>
-      <% }); %>
-   </div>
-   <small>Выберите все отрасли, в которых применяется данный товар. При выборе дочерней категории автоматически выберутся все родительские.</small>
-
-   <label>Порядок сортировки</label>
-   <input type="number" name="sort_order" value="<%= product ? product.sort_order : 0 %>">
-
-   <label>
-      <input type="checkbox" name="is_active" <%=product && product.is_active ? 'checked' : '' %>> Активен
-   </label>
-
-   <div style="margin-top: 20px;">
-      <button type="submit" class="btn">Сохранить</button>
-      <a href="/admin/products" class="btn-cancel">Отмена</a>
-   </div>
-</form>
-
-<% if (product) { %>
-   <hr style="margin: 30px 0;">
-   <div style="background: #f9f9f9; padding: 20px; border-radius: 8px;">
-      <h3>Дополнительные настройки</h3>
-      <p style="margin-bottom: 15px;">Управление изображениями, опциями и типами упаковок для этого товара:</p>
-      <a href="/admin/products/<%= product.id %>/images" class="btn-small">🖼️ Изображения</a>
-      <a href="/admin/products/<%= product.id %>/options" class="btn-small">📦 Опции</a>
-      <a href="/admin/products/<%= product.id %>/package-types" class="btn-small">🏷️ Типы упаковок</a>
-   </div>
+    </ul>
+  </div>
 <% } %>
 
-<link rel="stylesheet" href="/quill/quill.snow.css">
-<script src="/quill/quill.js"></script>
+<h1><%= product && product.id ? 'Редактирование товара' : 'Создание товара' %></h1>
 
-<script>
+<form method="POST" action="<%= action %>" id="product-form">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+  <fieldset>
+    <legend>Основные данные</legend>
+    <div class="form-row two-cols">
+      <div class="form-group">
+        <label for="name">Название товара *</label>
+        <input type="text" id="name" name="name" value="<%= product ? product.name : '' %>" required>
+      </div>
+      <div class="form-group">
+        <label for="slug">URL-имя (slug) *</label>
+        <input type="text" id="slug" name="slug" value="<%= product ? product.slug : '' %>" required>
+        <small>Только латинские буквы, цифры и дефисы. Например: nasos-drenazhnyj</small>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="excerpt">Краткое описание (отображается в списках)</label>
+      <textarea id="excerpt" name="excerpt" rows="3"><%= product ? product.excerpt : '' %></textarea>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Полное описание</legend>
+    <div id="quill-editor" style="height: 400px; margin-bottom: 20px;"></div>
+    <input type="hidden" name="description" id="description-hidden">
+  </fieldset>
+
+  <fieldset>
+    <legend>Категории и отрасли</legend>
+    <div class="form-group">
+      <label for="category_id">Основная категория (для навигации по сайту)</label>
+      <select name="category_id" id="category_id">
+        <option value="">— Без категории —</option>
+        <% categories.forEach(cat => { %>
+          <% if (!cat.parent_id) { %>
+            <option value="<%= cat.id %>" <%= (product && product.category_id == cat.id) ? 'selected' : '' %>><%= cat.name %></option>
+          <% } %>
+        <% }); %>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Отрасли применения (можно выбрать несколько)</label>
+      <div style="margin-bottom: 8px;">
+        <button type="button" id="expand-all-btn" class="btn-small">Развернуть всё</button>
+        <button type="button" id="collapse-all-btn" class="btn-small">Свернуть всё</button>
+      </div>
+      <div class="categories-tree" id="categories-tree">
+        <%
+          function renderTree(items, selected) {
+            items.forEach(function(item) {
+              var hasChildren = item.children && item.children.length > 0;
+              var collapsed = hasChildren && selected.indexOf(item.id) === -1;
+        %>
+              <li class="tree-node <%= hasChildren ? 'has-children' : '' %> <%= collapsed ? 'collapsed' : '' %>">
+                <span class="tree-toggle"><%= hasChildren ? '▶' : '' %></span>
+                <label class="category-label">
+                  <input type="checkbox" name="categories" value="<%= item.id %>" class="category-checkbox"
+                    <%= selected.indexOf(item.id) !== -1 ? 'checked' : '' %>
+                    data-parent-id="<%= item.parent_id || '' %>">
+                  <%= item.name %>
+                </label>
+                <% if (hasChildren) { %>
+                  <ul>
+                    <% renderTree(item.children, selected); %>
+                  </ul>
+                <% } %>
+              </li>
+        <%
+            });
+          }
+
+          var catMap = new Map();
+          categories.forEach(function(c) { catMap.set(c.id, Object.assign({}, c, { children: [] })); });
+          var roots = [];
+          categories.forEach(function(c) {
+            if (c.parent_id && catMap.has(c.parent_id)) {
+              catMap.get(c.parent_id).children.push(catMap.get(c.id));
+            } else if (!c.parent_id) {
+              roots.push(catMap.get(c.id));
+            }
+          });
+        %>
+        <ul class="tree-root">
+          <% renderTree(roots, selectedCategories || []); %>
+        </ul>
+      </div>
+      <small>При выборе дочерней категории автоматически выберутся все родители. Нажмите на стрелку, чтобы развернуть/свернуть.</small>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Настройки отображения</legend>
+    <div class="form-row two-cols">
+      <div class="form-group">
+        <label for="sort_order">Порядок сортировки</label>
+        <input type="number" id="sort_order" name="sort_order" value="<%= product ? product.sort_order : 0 %>">
+        <small>Чем меньше число, тем выше в списке</small>
+      </div>
+      <div class="form-group checkbox-group">
+        <label>
+          <input type="checkbox" name="is_active" <%= (product && product.is_active) ? 'checked' : '' %>> Товар активен
+        </label>
+      </div>
+    </div>
+  </fieldset>
+
+  <div class="form-actions">
+    <button type="submit" class="btn">Сохранить</button>
+    <a href="/admin/products" class="btn-cancel">Отмена</a>
+  </div>
+</form>
+
+<% if (product && product.id) { %>
+  <hr>
+  <div class="images-section">
+    <h3>Изображения товара</h3>
+    <div class="form-row two-cols" style="align-items: flex-start;">
+      <div class="form-group">
+        <label>Основное изображение</label>
+        <div class="main-image-preview" id="main-image-preview">
+          <% if (product.image_url) { %>
+            <img src="<%= product.image_url %>" alt="Основное изображение" id="main-image-img">
+          <% } else { %>
+            <p style="color: #888;">Не выбрано</p>
+          <% } %>
+        </div>
+        <small>Нажмите «⭐ Основное» у нужной картинки в галерее</small>
+      </div>
+      <div class="form-group">
+        <label>Галерея изображений</label>
+        <div class="image-upload-area" id="gallery-upload-area">
+          <input type="file" id="gallery-file-input" accept="image/*" multiple style="display: none;">
+          <div class="upload-placeholder" id="gallery-placeholder">
+            <span>📷</span>
+            <p>Перетащите изображения сюда или нажмите для выбора</p>
+            <small>Поддерживаются JPG, PNG, WebP</small>
+          </div>
+        </div>
+        <div class="images-grid" id="gallery-grid"></div>
+      </div>
+    </div>
+  </div>
+<% } %>
+
+<!-- Quill локально -->
+<link rel="stylesheet" href="/quill/quill.snow.css">
+<script src="/quill/quill.js" nonce="<%= nonce %>"></script>
+
+<script nonce="<%= nonce %>">
   document.addEventListener('DOMContentLoaded', function () {
-    // Quill editor
     var quill = new Quill('#quill-editor', {
       theme: 'snow',
       placeholder: 'Введите описание товара...',
@@ -82,67 +176,217 @@
       }
     });
 
-    const existingHtml = `<%- product ? product.description : '' %>`;
+    var existingHtml = '<%- product ? (product.description || "") : "" %>';
     if (existingHtml && existingHtml !== '') {
       quill.root.innerHTML = existingHtml;
     }
 
-    const form = document.querySelector('form');
-    const hiddenField = document.getElementById('description-hidden');
+    var form = document.getElementById('product-form');
+    var hiddenField = document.getElementById('description-hidden');
     form.addEventListener('submit', function () {
       hiddenField.value = quill.root.innerHTML;
     });
 
-    // ========== ЛОГИКА ВЫБОРА КАТЕГОРИЙ (родители вверх, при выключении – дети вниз) ==========
-    const allCheckboxes = document.querySelectorAll('input[type="checkbox"][name="categories"]');
-    if (allCheckboxes.length === 0) return;
+    var nameInput = document.getElementById('name');
+    var slugInput = document.getElementById('slug');
+    var slugManual = false;
 
-    // Карта: id чекбокса -> сам чекбокс
-    const checkboxById = new Map();
-    // Карта: parent_id -> массив прямых дочерних чекбоксов (для выключения потомков)
-    const childrenMap = new Map();
-
-    allCheckboxes.forEach(cb => {
-      const id = cb.value;
-      const parentId = cb.getAttribute('data-parent-id');
-      checkboxById.set(id, cb);
-      if (parentId && parentId !== '') {
-        if (!childrenMap.has(parentId)) childrenMap.set(parentId, []);
-        childrenMap.get(parentId).push(cb);
+    nameInput.addEventListener('input', function() {
+      if (!slugManual && slugInput) {
+        slugInput.value = this.value
+          .toString()
+          .toLowerCase()
+          .trim()
+          .replace(/\s+/g, '-')
+          .replace(/[^\w\-]+/g, '')
+          .replace(/\-\-+/g, '-')
+          .replace(/^-+|-+$/g, '');
       }
     });
 
-    // Рекурсивно выключает всех потомков (всех уровней) – используется при снятии галочки
-    function setDescendantsState(parentId, isChecked) {
-      const children = childrenMap.get(parentId) || [];
-      children.forEach(child => {
-        child.checked = isChecked;
-        setDescendantsState(child.value, isChecked);
+    slugInput.addEventListener('input', function() {
+      slugManual = true;
+    });
+
+    initCategoryTree();
+
+    document.getElementById('expand-all-btn').addEventListener('click', function() {
+      document.querySelectorAll('.categories-tree .tree-node').forEach(function(node) {
+        node.classList.remove('collapsed');
+      });
+    });
+    document.getElementById('collapse-all-btn').addEventListener('click', function() {
+      document.querySelectorAll('.categories-tree .tree-node.has-children').forEach(function(node) {
+        node.classList.add('collapsed');
+      });
+    });
+
+    var productId = <%- product && product.id ? product.id : 'null' %>;
+    if (productId !== 'null') {
+      loadGallery();
+      initGalleryUpload();
+    }
+
+    function initGalleryUpload() {
+      var uploadArea = document.getElementById('gallery-upload-area');
+      var fileInput = document.getElementById('gallery-file-input');
+
+      uploadArea.addEventListener('click', function() { fileInput.click(); });
+      fileInput.addEventListener('change', function() {
+        if (fileInput.files.length > 0) uploadFiles(fileInput.files);
+      });
+
+      uploadArea.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+      });
+      uploadArea.addEventListener('dragleave', function() {
+        uploadArea.classList.remove('dragover');
+      });
+      uploadArea.addEventListener('drop', function(e) {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) uploadFiles(e.dataTransfer.files);
       });
     }
 
-    allCheckboxes.forEach(cb => {
+    function loadGallery() {
+      fetch('/admin/products/' + productId + '/images/list')
+        .then(function(res) { return res.json(); })
+        .then(function(images) {
+          renderGallery(images);
+          var mainImg = images.find(function(img) { return img.is_main; });
+          updateMainPreview(mainImg ? mainImg.image_url : null);
+        })
+        .catch(function(err) { console.error('Ошибка загрузки галереи:', err); });
+    }
+
+    function renderGallery(images) {
+      var grid = document.getElementById('gallery-grid');
+      grid.innerHTML = images.map(function(img) {
+        return '<div class="image-card" data-id="' + img.id + '">' +
+          '<img src="' + img.image_url + '" alt="Изображение">' +
+          '<div class="actions">' +
+            '<button type="button" class="btn-small set-main-btn" data-id="' + img.id + '">⭐ Основное</button>' +
+            '<button type="button" class="btn-small btn-danger delete-img-btn" data-id="' + img.id + '">🗑️</button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+
+      grid.querySelectorAll('.set-main-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() { setMainImage(btn.dataset.id); });
+      });
+      grid.querySelectorAll('.delete-img-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() { deleteImage(btn.dataset.id); });
+      });
+    }
+
+    var csrfToken = document.querySelector('input[name="_csrf"]').value;
+
+    function uploadFiles(files) {
+      var formData = new FormData();
+      formData.append('_csrf', csrfToken);
+      for (var i = 0; i < files.length; i++) {
+        formData.append('images', files[i]);
+      }
+      fetch('/admin/products/' + productId + '/images/upload', {
+        method: 'POST',
+        body: formData
+      })
+      .then(function(res) {
+        if (!res.ok) throw new Error('Ошибка загрузки');
+        loadGallery();
+      })
+      .catch(function(err) {
+        alert('Не удалось загрузить изображения');
+        console.error(err);
+      })
+      .finally(function() {
+        document.getElementById('gallery-file-input').value = '';
+        document.getElementById('gallery-placeholder').style.display = 'flex';
+      });
+    }
+
+    function setMainImage(imageId) {
+      fetch('/admin/products/' + productId + '/images/' + imageId + '/set-main', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': csrfToken },
+        body: '_csrf=' + encodeURIComponent(csrfToken)
+      })
+      .then(function(res) {
+        if (!res.ok) throw new Error('Ошибка');
+        loadGallery();
+      })
+      .catch(function(err) {
+        alert('Ошибка установки главного изображения');
+        console.error(err);
+      });
+    }
+
+    function deleteImage(imageId) {
+      if (!confirm('Удалить изображение?')) return;
+      fetch('/admin/products/' + productId + '/images/' + imageId + '/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': csrfToken },
+        body: '_csrf=' + encodeURIComponent(csrfToken)
+      })
+      .then(function(res) {
+        if (!res.ok) throw new Error('Ошибка');
+        loadGallery();
+      })
+      .catch(function(err) {
+        alert('Ошибка удаления');
+        console.error(err);
+      });
+    }
+
+    function updateMainPreview(imageUrl) {
+      var previewDiv = document.getElementById('main-image-preview');
+      if (imageUrl) {
+        previewDiv.innerHTML = '<img src="' + imageUrl + '" alt="Основное изображение" id="main-image-img">';
+      } else {
+        previewDiv.innerHTML = '<p style="color: #888;">Не выбрано</p>';
+      }
+    }
+  });
+
+  function initCategoryTree() {
+    var tree = document.getElementById('categories-tree');
+    if (!tree) return;
+
+    tree.addEventListener('click', function (e) {
+      var toggle = e.target.closest('.tree-toggle');
+      if (!toggle) return;
+      var li = toggle.closest('li');
+      if (!li) return;
+      li.classList.toggle('collapsed');
+      var ul = li.querySelector(':scope > ul');
+      if (ul) ul.style.display = li.classList.contains('collapsed') ? 'none' : 'block';
+    });
+
+    var allCheckboxes = tree.querySelectorAll('input[type="checkbox"][name="categories"]');
+    var checkboxById = new Map();
+    allCheckboxes.forEach(function(cb) { checkboxById.set(cb.value, cb); });
+
+    allCheckboxes.forEach(function(cb) {
       cb.addEventListener('change', function () {
-        const isChecked = this.checked;
-        const thisId = this.value;
+        var isChecked = this.checked;
+        var thisId = this.value;
+        var li = this.closest('li');
+        var parentLi = li.parentElement.closest('li');
 
         if (isChecked) {
-          // При включении: находим всех прямых родителей (вверх по цепочке) и включаем их
-          let parentId = this.getAttribute('data-parent-id');
-          while (parentId && parentId !== '') {
-            const parentCb = checkboxById.get(parentId);
-            if (parentCb && !parentCb.checked) {
-              parentCb.checked = true;
-            }
-            // Переходим к родителю родителя
-            parentId = parentCb ? parentCb.getAttribute('data-parent-id') : null;
+          var currentParent = parentLi;
+          while (currentParent) {
+            var parentCb = currentParent.querySelector(':scope > label > input[type="checkbox"]');
+            if (parentCb && !parentCb.checked) parentCb.checked = true;
+            currentParent = currentParent.parentElement.closest('li');
           }
-          // НЕ включаем потомков
         } else {
-          // При выключении: выключаем всех потомков (всех уровней вниз)
-          setDescendantsState(thisId, false);
+          var descendantCbs = li.querySelectorAll('ul input[type="checkbox"]');
+          descendantCbs.forEach(function(dcb) { dcb.checked = false; });
         }
       });
     });
-  });
+  }
 </script>
