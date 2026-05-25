@@ -1,81 +1,218 @@
-Документация по тестам
-Общие сведения
+СпецСинтез – Административная панель и публичный сайт
 
-Проект содержит автоматические тесты для проверки корректности работы административной панели и публичного API.
-Тесты написаны с использованием фреймворков Mocha, Chai и библиотеки Supertest.
-Они не затрагивают рабочую базу данных – для тестов используется отдельная тестовая база.
+Полнофункциональный веб-сайт компании «НПО СпецСинтез» с административной панелью. Публичная часть представляет собой каталог продукции, новости, отраслевые страницы и форму обратной связи. Административная панель позволяет управлять товарами, категориями, новостями, типами упаковок, загружать изображения, использовать WYSIWYG-редактор.
+
+Стек: Node.js, Express 5, PostgreSQL, EJS, Multer, Nodemailer, Quill, Helmet, BCrypt, Mocha/Chai.
+1. Структура проекта
+text
+
+specsintez/
+├── public/                     # Статические файлы (клиентская часть)
+│   ├── index.html, catalog.html, product.html, news.html, news-detail.html, about.html, partners.html, production.html, contract.html
+│   ├── css/                    # Стили
+│   │   ├── main.css, adaptive.css, header.css, footer.css, contract.css, catalog.css, about.css, production.css, partners.css, detail-news.css
+│   ├── js/                     # Клиентские скрипты
+│   │   ├── main.js             # Бургер-меню, кнопка «наверх», обработка форм
+│   │   ├── main-page.js, catalog.js, news-public.js, detail-product.js, detail-news.js
+│   ├── admin/                  # Ресурсы админ-панели
+│   │   ├── css/admin.css
+│   │   ├── login.html
+│   ├── uploads/                # Загруженные файлы
+│   ├── images/logo/
+│   └── login-assets/           # Стили и скрипты страницы входа
+├── views/                      # EJS-шаблоны админки
+│   └── admin/
+│       ├── layout.ejs, index.ejs
+│       ├── products/ (form.ejs, index.ejs, package-types.ejs, _category_tree.ejs)
+│       ├── categories/ (form.ejs, index.ejs)
+│       ├── news/ (form.ejs, index.ejs)
+│       └── package-types/ (form.ejs, index.ejs)
+├── server.js                   # Главный сервер
+├── admin.js                    # Маршруты админки
+├── db.js                       # Подключение к PostgreSQL
+├── package.json
+├── .env                        # Переменные окружения (не включён в репозиторий)
+├── .gitignore
+├── test/                       # Автоматические тесты
+│   ├── setup.js
+│   ├── products.test.js, news.test.js, categories.test.js, package-types.test.js, public-api.test.js
+└── README.md
+
+2. Установка и запуск
 Требования
 
-    Node.js >= 18
+    Node.js 18+
+
+    PostgreSQL 12+
 
     npm
 
-    Отдельная база данных PostgreSQL (например, specsintez_test)
+Установка
 
-Настройка тестового окружения
+    Клонируйте репозиторий или распакуйте архив.
 
-    Создайте тестовую базу данных
-    Выполните в PostgreSQL (через psql или pgAdmin):
-    sql
+    Создайте базу данных specsintez (и при необходимости specsintez_test для тестов).
 
-    CREATE DATABASE specsintez_test;
+    Скопируйте .env.example в .env и заполните его (см. пример ниже).
 
-    Задайте параметры подключения к тестовой базе
-    В файле .env добавьте строку:
-    env
+    Выполните npm install.
 
-    TEST_DATABASE_URL=postgres://postgres:ваш_пароль@localhost:5432/specsintez_test
+    Запустите сервер: npm start или node server.js.
+    Для production рекомендуется использовать PM2: pm2 start server.js --name specsintez.
 
-    Или задайте отдельные переменные:
-    env
+Пример .env
+env
 
-    TEST_DB_HOST=localhost
-    TEST_DB_PORT=5432
-    TEST_DB_NAME=specsintez_test
-    TEST_DB_USER=postgres
-    TEST_DB_PASSWORD=ваш_пароль
+# База данных
+DB_USER=postgres
+DB_HOST=localhost
+DB_NAME=specsintez
+DB_PASSWORD=postgres
+DB_PORT=5432
 
-    Убедитесь, что db.js корректно переключается на тестовые настройки при NODE_ENV=test (уже настроено в проекте).
+# Тестовая база
+TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/specsintez_test
 
-    Установите зависимости (если ещё не установлены):
-    bash
+# Сессия
+SESSION_SECRET=your-random-secret
 
-    npm install
+# Администратор
+ADMIN_USER=admin
+ADMIN_PASS=$2b$10$...   # хеш пароля, полученный через bcrypt
+
+# SMTP для отправки заявок
+SMTP_HOST=smtp.mail.ru
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=artem-korytov@mail.ru
+SMTP_PASS=пароль-приложения-mailru
+
+# Порт
+PORT=5500
 
 Запуск тестов
-
-Выполните в корне проекта:
 bash
 
 npm test
 
-Скрипт автоматически установит переменную окружения NODE_ENV=test и запустит все тесты из папки test/.
+Тесты используют отдельную базу данных, указанную в TEST_DATABASE_URL. Перед запуском убедитесь, что она создана. Подробнее в разделе «Тестирование».
+3. Публичная часть
+
+    Главная (/) – видео-фон, отрасли, карточки товаров и новостей (динамическая загрузка через API).
+
+    Каталог (/catalog.html) – боковое дерево категорий, постраничный вывод товаров.
+
+    Детальная товара (/product.html?slug=...) – галерея, описание, отрасли, типы упаковок.
+
+    Новости (/news.html) – hero-новость и список.
+
+    Детальная новости (/news-detail.html?slug=...).
+
+    Статические страницы: О компании, Партнёрам, Производство ПАВ, Контрактное производство.
+
+    Формы обратной связи: на странице «Контрактное производство» и в CTA-блоке футера. Данные отправляются на email через Nodemailer (настроен на artem-korytov@mail.ru).
+
+Публичные API
+Метод	URL	Описание
+GET	/api/news	Hero-новость + список из 20 новостей
+GET	/api/news/:slug	Одна новость по slug
+GET	/api/categories?all=true	Категории (активные/все)
+GET	/api/products?category_id=X&all=true	Товары с фильтром
+GET	/api/random-products?limit=4	Случайные товары
+GET	/api/products/:id	Товар по ID
+GET	/api/products-by-slug/:slug	Полные данные товара (категории, упаковки, изображения)
+4. Административная панель
+
+Доступ после авторизации: /admin
+Логин и пароль задаются в .env.
+Функциональность
+
+    Товары: создание, редактирование, удаление. Поиск по названию/slug, сортировка, пагинация. Полное описание через Quill-редактор. Загрузка изображений (drag-and-drop) с возможностью выбора главного.
+
+    Категории: древовидная структура с поддержкой вложенности. Загрузка SVG-иконок только для корневых категорий.
+
+    Новости: Quill для контента, загрузка изображения, дата публикации, SEO-поля.
+
+    Типы упаковок: загрузка иконок, привязка к товарам с указанием объёма.
+
+    Безопасность: CSRF-защита, Content Security Policy с nonce, сессии.
+
+Основные маршруты админки
+Метод	URL	Действие
+GET/POST	/admin/products	Список товаров
+GET/POST	/admin/products/create	Создание товара
+GET/POST	/admin/products/:id/edit	Редактирование
+POST	/admin/products/:id/delete	Удаление
+AJAX	/admin/products/:id/images/...	Загрузка/удаление/установка главного изображения
+...	/admin/categories/...	Аналогично для категорий
+...	/admin/news/...	Аналогично для новостей
+...	/admin/package-types/...	Управление типами упаковок
+GET/POST	/admin/products/:id/package-types	Привязка упаковок
+5. Безопасность
+
+    Helmet устанавливает защитные HTTP-заголовки (CSP, HSTS, X-Frame-Options и др.).
+
+    CSP с nonce: все встроенные скрипты подписываются уникальным nonce, генерируемым для каждого запроса. Это исключает выполнение вредоносного кода.
+
+    CSRF-защита: все формы и AJAX-запросы содержат токен, проверяемый middleware csurf.
+
+    Сессии с флагом httpOnly.
+
+    CORS разрешает запросы только с доверенных доменов (рекомендуется настроить перед продакшеном).
+
+    Nodemailer использует пароль приложения, а не основной пароль почты.
+
+6. Тестирование
+
+Тесты охватывают CRUD-операции админки и публичные API.
+Инфраструктура: Mocha, Chai, Supertest.
+Запуск
+bash
+
+npm test
+
 Структура тестов
 
-Все тесты находятся в папке test/. Вспомогательные функции для создания и очистки таблиц — в test/setup.js.
-Тесты разбиты по разделам:
-Файл	Описание
-products.test.js	Создание товара, валидация полей, уникальность slug
-news.test.js	Создание, редактирование, удаление новостей; проверки slug
-categories.test.js	Создание, редактирование, удаление категорий; защита от удаления родителя с детьми
-package-types.test.js	Создание, редактирование, удаление типов упаковок; запрет удаления используемого типа
-public-api.test.js	Проверка публичных API‑эндпоинтов: /api/news, /api/categories, /api/products, /api/random-products, /api/products/:id, /api/products-by-slug/:slug
-Что проверяется
+    test/setup.js – создание и очистка таблиц.
 
-    Корректность ответов (статус-коды 200, 201, 302, 400, 404).
+    test/products.test.js – товары.
 
-    Валидация форм – обязательные поля, формат slug, уникальность.
+    test/news.test.js – новости.
 
-    Бизнес-логика – невозможность удалить родительскую категорию с дочерними, запрет удаления используемого типа упаковки.
+    test/categories.test.js – категории.
 
-    Фильтрация и рекурсивные запросы – в публичных API проверяется фильтрация по категории, возврат только активных записей, работа параметра all=true.
+    test/package-types.test.js – типы упаковок.
 
-    Структура ответов – наличие полей, типы данных, вложенные объекты (категории, изображения, типы упаковок).
+    test/public-api.test.js – публичные API.
 
-Примечания
+Тестовая база должна существовать (specsintez_test), параметры подключения задаются через TEST_DATABASE_URL. В тестовой среде отключены аутентификация и CSRF.
+7. Деплой и передача заказчику
+Локальный запуск
+bash
 
-    В тестовой среде отключены CSRF‑защита и принудительная аутентификация. Это сделано для упрощения тестирования и не влияет на производственный режим.
+npm install
+# заполнить .env
+node server.js
 
-    Все изменения в тестовой базе откатываются после каждого тестового сценария, поэтому тесты можно запускать многократно без риска испортить данные.
+Production (VPS)
 
-    При ошибках, связанных с подключением к базе, проверьте TEST_DATABASE_URL и доступность сервера PostgreSQL.
+    Используйте PM2: pm2 start server.js --name specsintez, pm2 save, pm2 startup.
+
+    Настройте Nginx в качестве обратного прокси на порт 5500.
+
+    Ограничьте CORS в server.js.
+
+
+Сборка Docker (опционально)
+
+Прилагаются Dockerfile и docker-compose.yml (см. корень проекта).
+Запуск: docker-compose up -d.
+8. Примечания
+
+    Таблица product_options больше не используется, её можно удалить из продакшен-базы.
+
+    В .gitignore исключены node_modules/, .env, public/uploads/, test/ (при необходимости включите тесты).
+
+    Для изменения получателя заявок отредактируйте to: 'artem-korytov@mail.ru' в server.js.
+
+    Перед передачей убедитесь, что в .env установлены реальные пароли и секреты.
