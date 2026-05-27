@@ -28,18 +28,18 @@ if (!isTest) {
       next();
    });
 
-   app.use(helmet({
-      contentSecurityPolicy: {
-         directives: {
-            defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", (req, res) => `'nonce-${res.locals.nonce}'`],
-            styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.quilljs.com"],
-            fontSrc: ["'self'"],
-            imgSrc: ["'self'", "data:", "https:"],
-            connectSrc: ["'self'"]
-         }
-      }
-   }));
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", (req, res) => `'nonce-${res.locals.nonce}'`],
+      styleSrc: ["'self'"],   // ← больше нет 'unsafe-inline'
+      fontSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"]
+    }
+  }
+}))
 }
 
 // ========== НАСТРОЙКА ШАБЛОНИЗАТОРА ==========
@@ -71,6 +71,7 @@ const upload = multer({
       else cb(new Error('Только изображения'));
    }
 });
+
 
 // ========== СЕССИИ ==========
 app.use(session({
@@ -357,19 +358,18 @@ app.get('/product/:slug', (req, res) => {
    res.sendFile(path.join(__dirname, 'public', 'product.html'));
 });
 
-// ========== ОБРАБОТЧИК ОШИБОК CSRF ==========
+// ========== ЕДИНЫЙ ОБРАБОТЧИК ОШИБОК ==========
 app.use((err, req, res, next) => {
-   if (err.code === 'EBADCSRFTOKEN') {
-      res.status(403).send('Недействительный CSRF-токен');
-   } else {
-      next(err);
-   }
-});
+  // Логируем полный стек ошибки
+  console.error('Unhandled error:', err.stack);
 
-// ========== ГЛОБАЛЬНЫЙ ОБРАБОТЧИК ОШИБОК ==========
-app.use((err, req, res, next) => {
-   console.error('Unhandled error:', err);
-   res.status(500).send('Internal Server Error');
+  // Если ошибка CSRF – специальное сообщение
+  if (err.code === 'EBADCSRFTOKEN') {
+    return res.status(403).json({ error: 'Недействительный CSRF-токен' });
+  }
+
+  // Для всего остального – общая ошибка сервера
+  res.status(500).json({ error: 'Внутренняя ошибка сервера' });
 });
 
 // ========== ЭКСПОРТ ДЛЯ ТЕСТОВ ==========

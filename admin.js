@@ -4,6 +4,7 @@ const fs = require('fs');
 const pool = require('./db');
 const ejs = require('ejs');
 const { requireFields, checkSlugUnique } = require('./middleware/validation');
+const optimizeAndReplace = require('./middleware/uploadOptimize');
 
 module.exports = (upload) => {
    const router = express.Router();
@@ -103,6 +104,7 @@ module.exports = (upload) => {
    });
 
    router.post('/news/create',
+      optimizeAndReplace,
       upload.single('image'),
       requireFields('title', 'slug'),
       checkSlugUnique('news', 'slug'),
@@ -153,6 +155,7 @@ module.exports = (upload) => {
    });
 
    router.post('/news/:id/edit',
+      optimizeAndReplace,
       upload.single('image'),
       requireFields('title', 'slug'),
       checkSlugUnique('news', 'slug', 'id'),
@@ -265,6 +268,7 @@ module.exports = (upload) => {
    });
 
    router.post('/categories/create',
+      optimizeAndReplace,
       upload.single('icon'),
       requireFields('name', 'slug'),
       checkSlugUnique('categories', 'slug'),
@@ -318,6 +322,7 @@ module.exports = (upload) => {
 
    router.post('/categories/:id/edit',
       upload.single('icon'),
+      optimizeAndReplace,
       requireFields('name', 'slug'),
       checkSlugUnique('categories', 'slug', 'id'),
       async (req, res) => {
@@ -576,7 +581,7 @@ module.exports = (upload) => {
       }
    });
 
-   router.post('/products/:id/images/upload', upload.array('images', 10), async (req, res) => {
+   router.post('/products/:id/images/upload', upload.array('images', 10), optimizeAndReplace, async (req, res) => {
       try {
          const productId = req.params.id;
          const files = req.files;
@@ -669,6 +674,7 @@ module.exports = (upload) => {
    });
 
    router.post('/package-types/create',
+      optimizeAndReplace,
       upload.single('icon'),
       requireFields('name'),
       async (req, res) => {
@@ -715,6 +721,7 @@ module.exports = (upload) => {
    });
 
    router.post('/package-types/:id/edit',
+      optimizeAndReplace,
       upload.single('icon'),
       requireFields('name'),
       async (req, res) => {

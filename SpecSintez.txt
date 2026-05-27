@@ -1,2 +1,11 @@
 pm2 start server.js --name specsintez
 pm2 stop specsintez
+
+server.js - заменить:
+app.use(cors({
+  origin: [
+    'https://specsintez.com',
+    'https://www.specsintez.com',
+    'https://admin.specsintez.com'
+  ]
+}));

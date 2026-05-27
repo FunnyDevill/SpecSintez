@@ -173,6 +173,10 @@
   cursor: pointer;
 }
 
+.lightbox--visible {
+  display: flex !important;
+}
+
 /* Блок отраслей на детальной странице товара */
 .product-industries {
     margin-top: 2rem;
