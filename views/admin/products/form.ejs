@@ -1,431 +1,433 @@
-<% if (typeof errors !=='undefined' && errors.length> 0) { %>
-   <div class="form-errors">
-      <strong>Ошибки:</strong>
-      <ul>
-         <% errors.forEach(err=> { %>
-            <li>
-               <%= err %>
-            </li>
-            <% }); %>
-      </ul>
-   </div>
-   <% } %>
+<% if (typeof errors !== 'undefined' && errors.length > 0) { %>
+  <div class="form-errors">
+    <strong>Ошибки:</strong>
+    <ul>
+      <% errors.forEach(err => { %>
+        <li><%= err %></li>
+      <% }); %>
+    </ul>
+  </div>
+<% } %>
 
-      <h1>
-         <%= product && product.id ? 'Редактирование товара' : 'Создание товара' %>
-      </h1>
+<h1><%= product && product.id ? 'Редактирование товара' : 'Создание товара' %></h1>
 
-      <form method="POST" action="<%= action %>" id="product-form">
-         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+<form method="POST" action="<%= action %>" id="product-form">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
-         <fieldset>
-            <legend>Основные данные</legend>
-            <div class="form-row two-cols">
-               <div class="form-group">
-                  <label for="name">Название товара *</label>
-                  <input type="text" id="name" name="name" value="<%= product ? product.name : '' %>" required>
-               </div>
-               <div class="form-group">
-                  <label for="slug">Код для ссылки (slug) *</label>
-                  <input type="text" id="slug" name="slug" value="<%= product ? product.slug : '' %>" required>
-                  <small>Латинские буквы, цифры и дефисы. Пример: nasos-drenazhnyj</small>
-               </div>
-            </div>
+  <fieldset>
+    <legend>Основные данные</legend>
+    <div class="form-row two-cols">
+      <div class="form-group">
+        <label for="name">Название товара *</label>
+        <input type="text" id="name" name="name" value="<%= product ? product.name : '' %>" required>
+      </div>
+      <div class="form-group">
+        <label for="slug">Код для ссылки (slug) *</label>
+        <input type="text" id="slug" name="slug" value="<%= product ? product.slug : '' %>" required>
+        <small>Латинские буквы, цифры и дефисы. Пример: nasos-drenazhnyj</small>
+      </div>
+    </div>
 
-            <div class="form-group">
-               <label for="excerpt">Краткое описание (отображается в списках)</label>
-               <textarea id="excerpt" name="excerpt" rows="3"><%= product ? product.excerpt : '' %></textarea>
-            </div>
-         </fieldset>
+    <div class="form-group">
+      <label for="excerpt">Краткое описание (отображается в списках)</label>
+      <textarea id="excerpt" name="excerpt" rows="3"><%= product ? product.excerpt : '' %></textarea>
+    </div>
+  </fieldset>
 
-         <fieldset>
-            <legend>Полное описание</legend>
-            <div id="quill-editor" class="quill-container"></div>
-            <input type="hidden" name="description" id="description-hidden">
-         </fieldset>
+  <fieldset>
+    <legend>Полное описание</legend>
+    <div id="tinymce-editor" class="tinymce-container"></div>
+    <input type="hidden" name="description" id="description-hidden">
+  </fieldset>
 
-         <fieldset>
-            <legend>Категории и отрасли</legend>
-            <div class="form-group">
-               <label for="category_id">Основная категория (для навигации по сайту)</label>
-               <select name="category_id" id="category_id">
-                  <option value="">— Без категории —</option>
-                  <% categories.forEach(cat=> { %>
-                     <% if (!cat.parent_id) { %>
-                        <option value="<%= cat.id %>" <%=(product && product.category_id==cat.id) ? 'selected' : '' %>>
-                           <%= cat.name %>
-                        </option>
-                        <% } %>
-                           <% }); %>
-               </select>
-            </div>
+  <fieldset>
+    <legend>Категории и отрасли</legend>
+    <div class="form-group">
+      <label for="category_id">Основная категория (для навигации по сайту)</label>
+      <select name="category_id" id="category_id">
+        <option value="">— Без категории —</option>
+        <% categories.forEach(cat => { %>
+          <% if (!cat.parent_id) { %>
+            <option value="<%= cat.id %>" <%= (product && product.category_id == cat.id) ? 'selected' : '' %>><%= cat.name %></option>
+          <% } %>
+        <% }); %>
+      </select>
+    </div>
 
-            <div class="form-group">
-               <label>Отрасли применения (можно выбрать несколько)</label>
-               <div class="mb-8">
-                  <button type="button" id="expand-all-btn" class="btn-small">Развернуть всё</button>
-                  <button type="button" id="collapse-all-btn" class="btn-small">Свернуть всё</button>
-               </div>
-               <div class="categories-tree" id="categories-tree">
-                  <% function renderTree(items, selected) { items.forEach(function(item) { var hasChildren=item.children
-                     && item.children.length> 0;
-                     var collapsed = hasChildren && selected.indexOf(item.id) === -1;
-                     %>
-                     <li class="tree-node <%= hasChildren ? 'has-children' : '' %> <%= collapsed ? 'collapsed' : '' %>">
-                        <span class="tree-toggle">
-                           <%= hasChildren ? '▶' : '' %>
-                        </span>
-                        <label class="category-label">
-                           <input type="checkbox" name="categories" value="<%= item.id %>" class="category-checkbox"
-                              <%=selected.indexOf(item.id) !==-1 ? 'checked' : '' %>
-                           data-parent-id="<%= item.parent_id || '' %>">
-                              <%= item.name %>
-                        </label>
-                        <% if (hasChildren) { %>
-                           <ul>
-                              <% renderTree(item.children, selected); %>
-                           </ul>
-                           <% } %>
-                     </li>
-                     <% }); } var catMap=new Map(); categories.forEach(function(c) { catMap.set(c.id, Object.assign({},
-                        c, { children: [] })); }); var roots=[]; categories.forEach(function(c) { if (c.parent_id &&
-                        catMap.has(c.parent_id)) { catMap.get(c.parent_id).children.push(catMap.get(c.id)); } else if
-                        (!c.parent_id) { roots.push(catMap.get(c.id)); } }); %>
-                        <ul class="tree-root">
-                           <% renderTree(roots, selectedCategories || []); %>
-                        </ul>
-               </div>
-               <small>При выборе дочерней категории автоматически выберутся все родители. Нажмите на стрелку, чтобы
-                  развернуть/свернуть.</small>
-            </div>
-         </fieldset>
+    <div class="form-group">
+      <label>Отрасли применения (можно выбрать несколько)</label>
+      <div class="mb-8">
+        <button type="button" id="expand-all-btn" class="btn-small">Развернуть всё</button>
+        <button type="button" id="collapse-all-btn" class="btn-small">Свернуть всё</button>
+      </div>
+      <div class="categories-tree" id="categories-tree">
+        <%
+          function renderTree(items, selected) {
+            items.forEach(function(item) {
+              var hasChildren = item.children && item.children.length > 0;
+              var collapsed = hasChildren && selected.indexOf(item.id) === -1;
+        %>
+              <li class="tree-node <%= hasChildren ? 'has-children' : '' %> <%= collapsed ? 'collapsed' : '' %>">
+                <span class="tree-toggle"><%= hasChildren ? '▶' : '' %></span>
+                <label class="category-label">
+                  <input type="checkbox" name="categories" value="<%= item.id %>" class="category-checkbox"
+                    <%= selected.indexOf(item.id) !== -1 ? 'checked' : '' %>
+                    data-parent-id="<%= item.parent_id || '' %>">
+                  <%= item.name %>
+                </label>
+                <% if (hasChildren) { %>
+                  <ul>
+                    <% renderTree(item.children, selected); %>
+                  </ul>
+                <% } %>
+              </li>
+        <%
+            });
+          }
 
-         <fieldset>
-            <legend>Типы упаковок и объёмы</legend>
-            <table class="data-table">
-               <thead>
-                  <tr>
-                     <th>Выбрать</th>
-                     <th>Тип упаковки</th>
-                     <th>Объём</th>
-                  </tr>
-               </thead>
-               <tbody>
-                  <% var selectedMap={}; (typeof selectedPackageTypes !=='undefined' ? selectedPackageTypes :
-                     []).forEach(function(s) { selectedMap[s.package_type_id]=s.volume || '' ; }); %>
-                     <% if (typeof allPackageTypes !=='undefined' ) { %>
-                        <% allPackageTypes.forEach(function(type) { var checked=selectedMap.hasOwnProperty(type.id)
-                           ? 'checked' : '' ; var vol=selectedMap[type.id] || '' ; var volName='volume_' + type.id; %>
-                           <tr>
-                              <td><input type="checkbox" name="package_type_ids" value="<%= type.id %>" <%=checked %>>
-                              </td>
-                              <td>
-                                 <%= type.name %>
-                                    <% if (type.icon_url) { %><img src="<%= type.icon_url %>" class="pkg-icon-inline">
-                                       <% } %>
-                              </td>
-                              <td><input type="text" name="<%= volName %>" value="<%= vol %>"
-                                    placeholder="1 л, 500 мл..." class="volume-input"></td>
-                           </tr>
-                           <% }); %>
-                              <% } %>
-               </tbody>
-            </table>
-         </fieldset>
+          var catMap = new Map();
+          categories.forEach(function(c) { catMap.set(c.id, Object.assign({}, c, { children: [] })); });
+          var roots = [];
+          categories.forEach(function(c) {
+            if (c.parent_id && catMap.has(c.parent_id)) {
+              catMap.get(c.parent_id).children.push(catMap.get(c.id));
+            } else if (!c.parent_id) {
+              roots.push(catMap.get(c.id));
+            }
+          });
+        %>
+        <ul class="tree-root">
+          <% renderTree(roots, selectedCategories || []); %>
+        </ul>
+      </div>
+      <small>При выборе дочерней категории автоматически выберутся все родители. Нажмите на стрелку, чтобы развернуть/свернуть.</small>
+    </div>
+  </fieldset>
 
-         <fieldset>
-            <legend>Настройки отображения</legend>
-            <div class="form-row two-cols">
-               <div class="form-group">
-                  <label for="sort_order">Порядок сортировки</label>
-                  <input type="number" id="sort_order" name="sort_order"
-                     value="<%= product ? product.sort_order : 0 %>">
-                  <small>Чем меньше число, тем выше в списке</small>
-               </div>
-               <div class="form-group checkbox-group">
-                  <label>
-                     <input type="checkbox" name="is_active" <%=(product && product.is_active) ? 'checked' : '' %>>
-                     Товар активен
-                  </label>
-               </div>
-            </div>
-         </fieldset>
+  <fieldset>
+    <legend>Типы упаковок и объёмы</legend>
+    <table class="data-table">
+      <thead>
+        <tr><th>Выбрать</th><th>Тип упаковки</th><th>Объём</th></tr>
+      </thead>
+      <tbody>
+        <% 
+           var selectedMap = {};
+           (typeof selectedPackageTypes !== 'undefined' ? selectedPackageTypes : []).forEach(function(s) { selectedMap[s.package_type_id] = s.volume || ''; });
+        %>
+        <% if (typeof allPackageTypes !== 'undefined') { %>
+          <% allPackageTypes.forEach(function(type) { 
+              var checked = selectedMap.hasOwnProperty(type.id) ? 'checked' : '';
+              var vol = selectedMap[type.id] || '';
+              var volName = 'volume_' + type.id;
+          %>
+            <tr>
+              <td><input type="checkbox" name="package_type_ids" value="<%= type.id %>" <%= checked %>></td>
+              <td><%= type.name %> <% if (type.icon_url) { %><img src="<%= type.icon_url %>" class="pkg-icon-inline"><% } %></td>
+              <td><input type="text" name="<%= volName %>" value="<%= vol %>" placeholder="1 л, 500 мл..." class="volume-input"></td>
+            </tr>
+          <% }); %>
+        <% } %>
+      </tbody>
+    </table>
+  </fieldset>
 
-         <div class="form-actions">
-            <button type="submit" class="btn">Сохранить</button>
-            <a href="/admin/products" class="btn-cancel">Отмена</a>
-         </div>
-      </form>
+  <fieldset>
+    <legend>Настройки отображения</legend>
+    <div class="form-row two-cols">
+      <div class="form-group">
+        <label for="sort_order">Порядок сортировки</label>
+        <input type="number" id="sort_order" name="sort_order" value="<%= product ? product.sort_order : 0 %>">
+        <small>Чем меньше число, тем выше в списке</small>
+      </div>
+      <div class="form-group checkbox-group">
+        <label>
+          <input type="checkbox" name="is_active" <%= (product && product.is_active) ? 'checked' : '' %>> Товар активен
+        </label>
+      </div>
+    </div>
+  </fieldset>
 
-      <% if (product && product.id) { %>
-         <hr>
-         <div class="images-section">
-            <h3>Изображения товара</h3>
-            <div class="form-row two-cols images-row">
-               <div class="form-group">
-                  <label>Основное изображение</label>
-                  <div class="main-image-preview" id="main-image-preview">
-                     <% if (product.image_url) { %>
-                        <img src="<%= product.image_url %>" alt="Основное изображение" id="main-image-img">
-                        <% } else { %>
-                           <p class="not-selected">Не выбрано</p>
-                           <% } %>
-                  </div>
-                  <small>Нажмите «⭐ Основное» у нужной картинки в галерее</small>
-               </div>
-               <div class="form-group">
-                  <label>Галерея изображений</label>
-                  <div class="image-upload-area" id="gallery-upload-area">
-                     <input type="file" id="gallery-file-input" accept="image/*" multiple class="hidden">
-                     <div class="upload-placeholder" id="gallery-placeholder">
-                        <span>📷</span>
-                        <p>Перетащите изображения сюда или нажмите для выбора</p>
-                        <small>Поддерживаются JPG, PNG, WebP</small>
-                     </div>
-                  </div>
-                  <div class="images-grid" id="gallery-grid"></div>
-               </div>
-            </div>
-         </div>
-         <% } %>
+  <div class="form-actions">
+    <button type="submit" class="btn">Сохранить</button>
+    <a href="/admin/products" class="btn-cancel">Отмена</a>
+  </div>
+</form>
 
-            <!-- Quill локально -->
-            <link rel="stylesheet" href="/quill/quill.snow.css">
-            <script src="/quill/quill.js" nonce="<%= nonce %>"></script>
+<% if (product && product.id) { %>
+  <hr>
+  <div class="images-section">
+    <h3>Изображения товара</h3>
+    <div class="form-row two-cols images-row">
+      <div class="form-group">
+        <label>Основное изображение</label>
+        <div class="main-image-preview" id="main-image-preview">
+          <% if (product.image_url) { %>
+            <img src="<%= product.image_url %>" alt="Основное изображение" id="main-image-img">
+          <% } else { %>
+            <p class="not-selected">Не выбрано</p>
+          <% } %>
+        </div>
+        <small>Нажмите «⭐ Основное» у нужной картинки в галерее</small>
+      </div>
+      <div class="form-group">
+        <label>Галерея изображений</label>
+        <div class="image-upload-area" id="gallery-upload-area">
+          <input type="file" id="gallery-file-input" accept="image/*" multiple class="hidden">
+          <div class="upload-placeholder" id="gallery-placeholder">
+            <span>📷</span>
+            <p>Перетащите изображения сюда или нажмите для выбора</p>
+            <small>Поддерживаются JPG, PNG, WebP</small>
+          </div>
+        </div>
+        <div class="images-grid" id="gallery-grid"></div>
+      </div>
+    </div>
+  </div>
+<% } %>
 
-            <script nonce="<%= nonce %>">
-               document.addEventListener('DOMContentLoaded', function () {
-                  var quill = new Quill('#quill-editor', {
-                     theme: 'snow',
-                     placeholder: 'Введите описание товара...',
-                     modules: {
-                        toolbar: [
-                           ['bold', 'italic', 'underline'],
-                           [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-                           ['clean']
-                        ]
-                     }
-                  });
+<!-- TinyMCE -->
+<script src="/tinymce/tinymce.min.js" nonce="<%= nonce %>"></script>
 
-                  var existingHtml = '<%- product ? (product.description || "") : "" %>';
-                  if (existingHtml && existingHtml !== '') {
-                     quill.root.innerHTML = existingHtml;
-                  }
+<script nonce="<%= nonce %>">
+  document.addEventListener('DOMContentLoaded', function () {
+    tinymce.init({
+      license_key: 'gpl',
+      selector: '#tinymce-editor',
+      base_url: '/tinymce',
+      height: 400,
+      menubar: false,
+      plugins: 'lists code',
+      toolbar: 'bold italic underline | bullist numlist | removeformat | code',
+      content_css: ['/css/main.css', '/css/tinymce-content.css'],
+      promotion: false,
+      setup: function (editor) {
+        var existingHtml = <%- product && product.description ? JSON.stringify(product.description) : '""' %>;
+        if (existingHtml && existingHtml !== '""' && existingHtml !== '') {
+          editor.on('init', function () {
+            editor.setContent(existingHtml.replace(/^"|"$/g, ''));
+          });
+        }
 
-                  var form = document.getElementById('product-form');
-                  var hiddenField = document.getElementById('description-hidden');
-                  form.addEventListener('submit', function () {
-                     hiddenField.value = quill.root.innerHTML;
-                  });
+        var form = document.getElementById('product-form');
+        var hiddenField = document.getElementById('description-hidden');
+        form.addEventListener('submit', function () {
+          hiddenField.value = editor.getContent();
+        });
+      }
+    });
 
-                  var nameInput = document.getElementById('name');
-                  var slugInput = document.getElementById('slug');
-                  var slugManual = false;
+    // ========== Slug ==========
+    var nameInput = document.getElementById('name');
+    var slugInput = document.getElementById('slug');
+    var slugManual = false;
 
-                  nameInput.addEventListener('input', function () {
-                     if (!slugManual && slugInput) {
-                        slugInput.value = this.value
-                           .toString()
-                           .toLowerCase()
-                           .trim()
-                           .replace(/\s+/g, '-')
-                           .replace(/[^\w\-]+/g, '')
-                           .replace(/\-\-+/g, '-')
-                           .replace(/^-+|-+$/g, '');
-                     }
-                  });
+    nameInput.addEventListener('input', function() {
+      if (!slugManual && slugInput) {
+        slugInput.value = this.value
+          .toString()
+          .toLowerCase()
+          .trim()
+          .replace(/\s+/g, '-')
+          .replace(/[^\w\-]+/g, '')
+          .replace(/\-\-+/g, '-')
+          .replace(/^-+|-+$/g, '');
+      }
+    });
 
-                  slugInput.addEventListener('input', function () {
-                     slugManual = true;
-                  });
+    slugInput.addEventListener('input', function() {
+      slugManual = true;
+    });
 
-                  initCategoryTree();
+    // ========== Дерево категорий ==========
+    initCategoryTree();
 
-                  document.getElementById('expand-all-btn').addEventListener('click', function () {
-                     document.querySelectorAll('.categories-tree .tree-node').forEach(function (node) {
-                        node.classList.remove('collapsed');
-                     });
-                  });
-                  document.getElementById('collapse-all-btn').addEventListener('click', function () {
-                     document.querySelectorAll('.categories-tree .tree-node.has-children').forEach(function (node) {
-                        node.classList.add('collapsed');
-                     });
-                  });
+    document.getElementById('expand-all-btn').addEventListener('click', function() {
+      document.querySelectorAll('.categories-tree .tree-node').forEach(function(node) {
+        node.classList.remove('collapsed');
+      });
+    });
+    document.getElementById('collapse-all-btn').addEventListener('click', function() {
+      document.querySelectorAll('.categories-tree .tree-node.has-children').forEach(function(node) {
+        node.classList.add('collapsed');
+      });
+    });
 
-                  var productId = <% - product && product.id ? product.id : 'null' %>;
-                  if (productId !== 'null') {
-                     loadGallery();
-                     initGalleryUpload();
-                  }
+    // ========== Галерея изображений ==========
+    var productId = <%= product && product.id ? product.id : 'null' %>;
+    if (productId !== 'null') {
+      loadGallery();
+      initGalleryUpload();
+    }
 
-                  function initGalleryUpload() {
-                     var uploadArea = document.getElementById('gallery-upload-area');
-                     var fileInput = document.getElementById('gallery-file-input');
+    function initGalleryUpload() {
+      var uploadArea = document.getElementById('gallery-upload-area');
+      var fileInput = document.getElementById('gallery-file-input');
 
-                     uploadArea.addEventListener('click', function () { fileInput.click(); });
-                     fileInput.addEventListener('change', function () {
-                        if (fileInput.files.length > 0) uploadFiles(fileInput.files);
-                     });
+      uploadArea.addEventListener('click', function() { fileInput.click(); });
+      fileInput.addEventListener('change', function() {
+        if (fileInput.files.length > 0) uploadFiles(fileInput.files);
+      });
 
-                     uploadArea.addEventListener('dragover', function (e) {
-                        e.preventDefault();
-                        uploadArea.classList.add('dragover');
-                     });
-                     uploadArea.addEventListener('dragleave', function () {
-                        uploadArea.classList.remove('dragover');
-                     });
-                     uploadArea.addEventListener('drop', function (e) {
-                        e.preventDefault();
-                        uploadArea.classList.remove('dragover');
-                        if (e.dataTransfer.files.length > 0) uploadFiles(e.dataTransfer.files);
-                     });
-                  }
+      uploadArea.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+      });
+      uploadArea.addEventListener('dragleave', function() {
+        uploadArea.classList.remove('dragover');
+      });
+      uploadArea.addEventListener('drop', function(e) {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) uploadFiles(e.dataTransfer.files);
+      });
+    }
 
-                  function loadGallery() {
-                     fetch('/admin/products/' + productId + '/images/list')
-                        .then(function (res) { return res.json(); })
-                        .then(function (images) {
-                           renderGallery(images);
-                           var mainImg = images.find(function (img) { return img.is_main; });
-                           updateMainPreview(mainImg ? mainImg.image_url : null);
-                        })
-                        .catch(function (err) { console.error('Ошибка загрузки галереи:', err); });
-                  }
+    function loadGallery() {
+      fetch('/admin/products/' + productId + '/images/list')
+        .then(function(res) { return res.json(); })
+        .then(function(images) {
+          renderGallery(images);
+          var mainImg = images.find(function(img) { return img.is_main; });
+          updateMainPreview(mainImg ? mainImg.image_url : null);
+        })
+        .catch(function(err) { console.error('Ошибка загрузки галереи:', err); });
+    }
 
-                  function renderGallery(images) {
-                     var grid = document.getElementById('gallery-grid');
-                     grid.innerHTML = images.map(function (img) {
-                        return '<div class="image-card" data-id="' + img.id + '">' +
-                           '<img src="' + img.image_url + '" alt="Изображение">' +
-                           '<div class="actions">' +
-                           '<button type="button" class="btn-small set-main-btn" data-id="' + img.id + '">⭐ Основное</button>' +
-                           '<button type="button" class="btn-small btn-danger delete-img-btn" data-id="' + img.id + '">🗑️</button>' +
-                           '</div>' +
-                           '</div>';
-                     }).join('');
+    function renderGallery(images) {
+      var grid = document.getElementById('gallery-grid');
+      grid.innerHTML = images.map(function(img) {
+        return '<div class="image-card" data-id="' + img.id + '">' +
+          '<img src="' + img.image_url + '" alt="Изображение">' +
+          '<div class="actions">' +
+            '<button type="button" class="btn-small set-main-btn" data-id="' + img.id + '">⭐ Основное</button>' +
+            '<button type="button" class="btn-small btn-danger delete-img-btn" data-id="' + img.id + '">🗑️</button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
 
-                     grid.querySelectorAll('.set-main-btn').forEach(function (btn) {
-                        btn.addEventListener('click', function () { setMainImage(btn.dataset.id); });
-                     });
-                     grid.querySelectorAll('.delete-img-btn').forEach(function (btn) {
-                        btn.addEventListener('click', function () { deleteImage(btn.dataset.id); });
-                     });
-                  }
+      grid.querySelectorAll('.set-main-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() { setMainImage(btn.dataset.id); });
+      });
+      grid.querySelectorAll('.delete-img-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() { deleteImage(btn.dataset.id); });
+      });
+    }
 
-                  var csrfToken = document.querySelector('input[name="_csrf"]').value;
+    var csrfToken = document.querySelector('input[name="_csrf"]').value;
 
-                  function uploadFiles(files) {
-                     var formData = new FormData();
-                     for (var i = 0; i < files.length; i++) {
-                        formData.append('images', files[i]);
-                     }
-                     fetch('/admin/products/' + productId + '/images/upload', {
-                        method: 'POST',
-                        headers: {
-                           'X-CSRF-Token': csrfToken
-                        },
-                        body: formData
-                     })
-                        .then(function (res) {
-                           if (!res.ok) throw new Error('Ошибка загрузки');
-                           loadGallery();
-                        })
-                        .catch(function (err) {
-                           alert('Не удалось загрузить изображения');
-                           console.error(err);
-                        })
-                        .finally(function () {
-                           document.getElementById('gallery-file-input').value = '';
-                           document.getElementById('gallery-placeholder').style.display = 'flex';
-                        });
-                  }
+    function uploadFiles(files) {
+      var formData = new FormData();
+      for (var i = 0; i < files.length; i++) {
+        formData.append('images', files[i]);
+      }
+      fetch('/admin/products/' + productId + '/images/upload', {
+        method: 'POST',
+        headers: {
+          'X-CSRF-Token': csrfToken
+        },
+        body: formData
+      })
+      .then(function(res) {
+        if (!res.ok) throw new Error('Ошибка загрузки');
+        loadGallery();
+      })
+      .catch(function(err) {
+        alert('Не удалось загрузить изображения');
+        console.error(err);
+      })
+      .finally(function() {
+        document.getElementById('gallery-file-input').value = '';
+        document.getElementById('gallery-placeholder').style.display = 'flex';
+      });
+    }
 
-                  function setMainImage(imageId) {
-                     fetch('/admin/products/' + productId + '/images/' + imageId + '/set-main', {
-                        method: 'POST',
-                        headers: {
-                           'Content-Type': 'application/x-www-form-urlencoded',
-                           'X-CSRF-Token': csrfToken
-                        },
-                        body: '_csrf=' + encodeURIComponent(csrfToken)
-                     })
-                        .then(function (res) {
-                           if (!res.ok) throw new Error('Ошибка');
-                           loadGallery();
-                        })
-                        .catch(function (err) {
-                           alert('Ошибка установки главного изображения');
-                           console.error(err);
-                        });
-                  }
+    function setMainImage(imageId) {
+      fetch('/admin/products/' + productId + '/images/' + imageId + '/set-main', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-CSRF-Token': csrfToken
+        },
+        body: '_csrf=' + encodeURIComponent(csrfToken)
+      })
+      .then(function(res) {
+        if (!res.ok) throw new Error('Ошибка');
+        loadGallery();
+      })
+      .catch(function(err) {
+        alert('Ошибка установки главного изображения');
+        console.error(err);
+      });
+    }
 
-                  function deleteImage(imageId) {
-                     if (!confirm('Удалить изображение?')) return;
-                     fetch('/admin/products/' + productId + '/images/' + imageId + '/delete', {
-                        method: 'POST',
-                        headers: {
-                           'Content-Type': 'application/x-www-form-urlencoded',
-                           'X-CSRF-Token': csrfToken
-                        },
-                        body: '_csrf=' + encodeURIComponent(csrfToken)
-                     })
-                        .then(function (res) {
-                           if (!res.ok) throw new Error('Ошибка');
-                           loadGallery();
-                        })
-                        .catch(function (err) {
-                           alert('Ошибка удаления');
-                           console.error(err);
-                        });
-                  }
+    function deleteImage(imageId) {
+      if (!confirm('Удалить изображение?')) return;
+      fetch('/admin/products/' + productId + '/images/' + imageId + '/delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-CSRF-Token': csrfToken
+        },
+        body: '_csrf=' + encodeURIComponent(csrfToken)
+      })
+      .then(function(res) {
+        if (!res.ok) throw new Error('Ошибка');
+        loadGallery();
+      })
+      .catch(function(err) {
+        alert('Ошибка удаления');
+        console.error(err);
+      });
+    }
 
-                  function updateMainPreview(imageUrl) {
-                     var previewDiv = document.getElementById('main-image-preview');
-                     if (imageUrl) {
-                        previewDiv.innerHTML = '<img src="' + imageUrl + '" alt="Основное изображение" id="main-image-img">';
-                     } else {
-                        previewDiv.innerHTML = '<p class="not-selected">Не выбрано</p>';
-                     }
-                  }
-               });
+    function updateMainPreview(imageUrl) {
+      var previewDiv = document.getElementById('main-image-preview');
+      if (imageUrl) {
+        previewDiv.innerHTML = '<img src="' + imageUrl + '" alt="Основное изображение" id="main-image-img">';
+      } else {
+        previewDiv.innerHTML = '<p class="not-selected">Не выбрано</p>';
+      }
+    }
+  });
 
-               function initCategoryTree() {
-                  var tree = document.getElementById('categories-tree');
-                  if (!tree) return;
+  function initCategoryTree() {
+    var tree = document.getElementById('categories-tree');
+    if (!tree) return;
 
-                  tree.addEventListener('click', function (e) {
-                     var toggle = e.target.closest('.tree-toggle');
-                     if (!toggle) return;
-                     var li = toggle.closest('li');
-                     if (!li) return;
-                     li.classList.toggle('collapsed');
-                     var ul = li.querySelector(':scope > ul');
-                     if (ul) ul.style.display = li.classList.contains('collapsed') ? 'none' : 'block';
-                  });
+    tree.addEventListener('click', function (e) {
+      var toggle = e.target.closest('.tree-toggle');
+      if (!toggle) return;
+      var li = toggle.closest('li');
+      if (!li) return;
+      li.classList.toggle('collapsed');
+      var ul = li.querySelector(':scope > ul');
+      if (ul) ul.style.display = li.classList.contains('collapsed') ? 'none' : 'block';
+    });
 
-                  var allCheckboxes = tree.querySelectorAll('input[type="checkbox"][name="categories"]');
-                  var checkboxById = new Map();
-                  allCheckboxes.forEach(function (cb) { checkboxById.set(cb.value, cb); });
+    var allCheckboxes = tree.querySelectorAll('input[type="checkbox"][name="categories"]');
+    var checkboxById = new Map();
+    allCheckboxes.forEach(function(cb) { checkboxById.set(cb.value, cb); });
 
-                  allCheckboxes.forEach(function (cb) {
-                     cb.addEventListener('change', function () {
-                        var isChecked = this.checked;
-                        var thisId = this.value;
-                        var li = this.closest('li');
-                        var parentLi = li.parentElement.closest('li');
+    allCheckboxes.forEach(function(cb) {
+      cb.addEventListener('change', function () {
+        var isChecked = this.checked;
+        var thisId = this.value;
+        var li = this.closest('li');
+        var parentLi = li.parentElement.closest('li');
 
-                        if (isChecked) {
-                           var currentParent = parentLi;
-                           while (currentParent) {
-                              var parentCb = currentParent.querySelector(':scope > label > input[type="checkbox"]');
-                              if (parentCb && !parentCb.checked) parentCb.checked = true;
-                              currentParent = currentParent.parentElement.closest('li');
-                           }
-                        } else {
-                           var descendantCbs = li.querySelectorAll('ul input[type="checkbox"]');
-                           descendantCbs.forEach(function (dcb) { dcb.checked = false; });
-                        }
-                     });
-                  });
-               }
-            </script>
+        if (isChecked) {
+          var currentParent = parentLi;
+          while (currentParent) {
+            var parentCb = currentParent.querySelector(':scope > label > input[type="checkbox"]');
+            if (parentCb && !parentCb.checked) parentCb.checked = true;
+            currentParent = currentParent.parentElement.closest('li');
+          }
+        } else {
+          var descendantCbs = li.querySelectorAll('ul input[type="checkbox"]');
+          descendantCbs.forEach(function(dcb) { dcb.checked = false; });
+        }
+      });
+    });
+  }
+</script>

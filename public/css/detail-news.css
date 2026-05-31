@@ -252,8 +252,24 @@
         white-space: normal;
     }
 }
+
+/* ===== Стили для списков внутри описаний ===== */
+.product-description ul,
+.news-detail__content ul {
+  list-style: disc !important;
+  padding-left: 1.5em !important;
+  margin-bottom: 1rem;
+}
+.product-description ol,
+.news-detail__content ol {
+  list-style: decimal !important;
+  padding-left: 1.5em !important;
+  margin-bottom: 1rem;
+}
+
 @media (max-width: 768px) {
   .product-media-row { flex-direction: column; }
   .gallery-thumbs-vertical { flex-direction: row; overflow-x: auto; }
   .news-detail__title, .product-detail__title { font-size: 1.5rem; }
 }
+

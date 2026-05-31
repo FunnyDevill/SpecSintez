@@ -8,17 +8,42 @@ const multer = require('multer');
 const pool = require('./db');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
-const csrf = require('csurf');
 const helmet = require('helmet');
 const compression = require('compression');
 const nodemailer = require('nodemailer');
 const adminRouter = require('./admin');
 const crypto = require('crypto');
-const sharp = require('sharp');
+const cookieParser = require('cookie-parser');
+
 
 const app = express();
 const port = process.env.PORT || 5500;
 const isTest = process.env.NODE_ENV === 'test';
+
+// ========== СОБСТВЕННАЯ CSRF-ЗАЩИТА (без внешних пакетов) ==========
+function customCsrfProtection(req, res, next) {
+   // Для GET‑запросов генерируем токен, сохраняем в сессии и ставим куку
+   if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') {
+      if (!req.session.csrfToken) {
+         req.session.csrfToken = crypto.randomUUID();
+      }
+      // Устанавливаем куку, чтобы она была доступна на всех страницах админки
+      res.cookie('csrfToken', req.session.csrfToken, { httpOnly: true, sameSite: 'strict' });
+      res.locals.csrfToken = req.session.csrfToken;
+      req.csrfToken = req.session.csrfToken;
+      return next();
+   }
+
+   // Для изменяющих методов проверяем токен из куки
+   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
+      const token = req.cookies.csrfToken;
+      if (token !== req.session.csrfToken) {
+         console.warn('CSRF token mismatch');
+         return res.status(403).json({ error: 'Недействительный CSRF-токен' });
+      }
+   }
+   next();
+}
 
 // ========== БЕЗОПАСНОСТЬ И ПРОИЗВОДИТЕЛЬНОСТЬ ==========
 if (!isTest) {
@@ -29,6 +54,7 @@ if (!isTest) {
       next();
    });
 
+   // Строгая CSP для публичной части (по умолчанию)
    app.use(helmet({
       contentSecurityPolicy: {
          directives: {
@@ -41,13 +67,27 @@ if (!isTest) {
          }
       }
    }));
+
+   // Отдельная CSP для админ-панели: разрешаем 'unsafe-inline' для стилей
+   app.use('/admin', (req, res, next) => {
+      helmet.contentSecurityPolicy({
+         directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", (req, res) => `'nonce-${res.locals.nonce}'`],
+            styleSrc: ["'self'", "'unsafe-inline'"],  // ← нужно для Quill
+            fontSrc: ["'self'"],
+            imgSrc: ["'self'", "data:", "https:"],
+            connectSrc: ["'self'"]
+         }
+      })(req, res, next);
+   });
 }
 
 // ========== НАСТРОЙКА ШАБЛОНИЗАТОРА ==========
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// ========== НАСТРОЙКА MULTER (ЗАГРУЗКА ИЗОБРАЖЕНИЙ) ==========
+// ========== НАСТРОЙКА MULTER ==========
 const storage = multer.diskStorage({
    destination: (req, file, cb) => {
       const uploadDir = path.join(__dirname, 'public', 'uploads');
@@ -73,32 +113,8 @@ const upload = multer({
    }
 });
 
-// ========== ОПТИМИЗАЦИЯ ИЗОБРАЖЕНИЙ (SHARP) ==========
-async function optimizeAndReplace(req, res, next) {
-   if (!req.file && !req.files) return next();
-   const files = req.files?.length ? req.files : [req.file].filter(Boolean);
-   try {
-      for (const file of files) {
-         const inputPath = path.join(__dirname, 'public', file.path || `/uploads/${file.filename}`);
-         const outputPath = inputPath;
-         const tempPath = inputPath + '.tmp';
-         await sharp(inputPath)
-            .resize({ width: 1200, withoutEnlargement: true })
-            .jpeg({ quality: 85, progressive: true })
-            .png({ quality: 85 })
-            .webp({ quality: 85 })
-            .toFile(tempPath);
-         fs.unlinkSync(inputPath);
-         fs.renameSync(tempPath, outputPath);
-      }
-      next();
-   } catch (err) {
-      console.error('Ошибка оптимизации изображения:', err);
-      next();
-   }
-}
-
 // ========== СЕССИИ ==========
+app.use(cookieParser());
 app.use(session({
    secret: process.env.SESSION_SECRET || 'default-secret',
    resave: false,
@@ -128,7 +144,7 @@ const transporter = nodemailer.createTransport({
    }
 });
 
-// ========== МАРШРУТ ДЛЯ ОТПРАВКИ ФОРМ (ДО СТАТИКИ) ==========
+// ========== МАРШРУТ ДЛЯ ОТПРАВКИ ФОРМ ==========
 app.post('/api/send-form', async (req, res) => {
    try {
       if (!req.body || Object.keys(req.body).length === 0) {
@@ -170,6 +186,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/quill', express.static(path.join(__dirname, 'node_modules/quill/dist')));
 app.use('/login-assets', express.static(path.join(__dirname, 'public', 'login-assets')));
 
+// ========== TinyMCE ==========
+app.use('/tinymce', express.static(path.join(__dirname, 'node_modules/tinymce')));
+
 // ========== МАРШРУТЫ ЛОГИНА ==========
 app.get('/admin/login', (req, res) => {
    res.sendFile(path.join(__dirname, 'public', 'admin', 'login.html'));
@@ -203,13 +222,9 @@ const isAuthenticated = (req, res, next) => {
    res.redirect('/admin/login');
 };
 
-// ========== CSRF-ЗАЩИТА (ОТКЛЮЧАЕТСЯ В ТЕСТАХ) ==========
+// ========== ПРИМЕНЯЕМ CSRF-ЗАЩИТУ К АДМИНКЕ (САМОДЕЛЬНУЮ) ==========
 if (!isTest) {
-   app.use('/admin', isAuthenticated, csrf({ session: true }));
-   app.use('/admin', (req, res, next) => {
-      res.locals.csrfToken = req.csrfToken();
-      next();
-   });
+   app.use('/admin', isAuthenticated, customCsrfProtection);
 }
 
 // ========== ЗАЩИЩЁННЫЕ СТАТИЧЕСКИЕ РЕСУРСЫ АДМИНКИ ==========
@@ -394,9 +409,6 @@ app.get('/product/:slug', (req, res) => {
 // ========== ЕДИНЫЙ ОБРАБОТЧИК ОШИБОК ==========
 app.use((err, req, res, next) => {
    console.error('Unhandled error:', err.stack);
-   if (err.code === 'EBADCSRFTOKEN') {
-      return res.status(403).json({ error: 'Недействительный CSRF-токен' });
-   }
    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
 });
 

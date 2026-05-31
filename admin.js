@@ -10,10 +10,19 @@ module.exports = (upload) => {
    const router = express.Router();
 
    const renderBody = async (viewPath, data, req) => {
-      const csrfToken = (typeof req.csrfToken === 'function') ? req.csrfToken() : '';
+      const csrfToken = req.csrfToken || '';
       const nonce = req.nonce || '';
       const mergedData = { ...data, csrfToken, nonce };
       return await ejs.renderFile(path.join(__dirname, 'views', viewPath), mergedData);
+   };
+
+   // Функция для исправления маркированных списков, сохранённых Quill как <ol>
+   const fixQuillLists = (html) => {
+      if (!html) return html;
+      // Заменяем <ol ... data-list="bullet" ...> на <ul>
+      return html
+         .replace(/<ol([^>]*?) data-list="bullet"([^>]*?)>/gi, '<ul$1$2>')
+         .replace(/<\/ol>/gi, '</ul>');
    };
 
    // =================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===================
@@ -120,7 +129,8 @@ module.exports = (upload) => {
                return res.render('admin/layout', { title: 'Создание новости', body, currentSection: 'news' });
             }
 
-            const { title, slug, excerpt, content, published_at, meta_title, meta_description, is_active, is_hero } = req.body;
+            let { title, slug, excerpt, content, published_at, meta_title, meta_description, is_active, is_hero } = req.body;
+            content = fixQuillLists(content);
             let image_url = null;
             if (req.file) image_url = `/uploads/${req.file.filename}`;
             const active = (is_active === 'on' || is_active === true || is_active === 'true');
@@ -173,7 +183,8 @@ module.exports = (upload) => {
                return res.render('admin/layout', { title: 'Редактирование новости', body, currentSection: 'news' });
             }
 
-            const { title, slug, excerpt, content, published_at, meta_title, meta_description, is_active, is_hero, remove_image } = req.body;
+            let { title, slug, excerpt, content, published_at, meta_title, meta_description, is_active, is_hero, remove_image } = req.body;
+            content = fixQuillLists(content);
             const id = req.params.id;
 
             const old = await pool.query('SELECT image_url FROM news WHERE id = $1', [id]);
@@ -223,9 +234,9 @@ module.exports = (upload) => {
    });
 
    // =================== КАТЕГОРИИ ===================
-router.get('/categories', async (req, res) => {
-   try {
-      const result = await pool.query(`
+   router.get('/categories', async (req, res) => {
+      try {
+         const result = await pool.query(`
          WITH RECURSIVE cat_tree AS (
              SELECT 
                  c.id, c.name, c.slug, c.parent_id, c.sort_order, c.is_active, 
@@ -247,14 +258,14 @@ router.get('/categories', async (req, res) => {
          )
          SELECT * FROM cat_tree ORDER BY path
       `);
-      const allCats = await pool.query('SELECT id, name FROM categories ORDER BY name');
-      const body = await renderBody('admin/categories/index.ejs', { categories: result.rows, allCategories: allCats.rows }, req);
-      res.render('admin/layout', { title: 'Категории', body, currentSection: 'categories' });
-   } catch (err) {
-      console.error(err);
-      res.status(500).send('Ошибка загрузки категорий');
-   }
-});
+         const allCats = await pool.query('SELECT id, name FROM categories ORDER BY name');
+         const body = await renderBody('admin/categories/index.ejs', { categories: result.rows, allCategories: allCats.rows }, req);
+         res.render('admin/layout', { title: 'Категории', body, currentSection: 'categories' });
+      } catch (err) {
+         console.error(err);
+         res.status(500).send('Ошибка загрузки категорий');
+      }
+   });
 
    router.get('/categories/create', async (req, res) => {
       const parents = await pool.query('SELECT id, name FROM categories ORDER BY name');
@@ -366,9 +377,10 @@ router.get('/categories', async (req, res) => {
                icon_svg = `/uploads/${req.file.filename}`;
             }
 
+            // Запрос без image_url!
             await pool.query(
-               `UPDATE categories SET name=$1, slug=$2, parent_id=$3, sort_order=$4, description=$5, image_url=$6, is_active=$7, icon_svg=$8 WHERE id=$9`,
-               [name.trim(), slug.trim(), parent_id || null, sort_order || 0, description, null, is_active === 'on', icon_svg, id]
+               `UPDATE categories SET name=$1, slug=$2, parent_id=$3, sort_order=$4, description=$5, is_active=$6, icon_svg=$7 WHERE id=$8`,
+               [name.trim(), slug.trim(), parent_id || null, sort_order || 0, description, is_active === 'on', icon_svg, id]
             );
             res.redirect('/admin/categories');
          } catch (err) {
@@ -460,7 +472,8 @@ router.get('/categories', async (req, res) => {
                return res.render('admin/layout', { title: 'Создание товара', body, currentSection: 'products' });
             }
 
-            const { name, slug, excerpt, description, category_id, sort_order, is_active } = req.body;
+            let { name, slug, excerpt, description, category_id, sort_order, is_active } = req.body;
+            description = fixQuillLists(description);
             const result = await pool.query(
                `INSERT INTO products (name, slug, excerpt, description, image_url, category_id, sort_order, is_active)
                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
@@ -556,7 +569,8 @@ router.get('/categories', async (req, res) => {
                return res.render('admin/layout', { title: 'Редактирование товара', body, currentSection: 'products' });
             }
 
-            const { name, slug, excerpt, description, category_id, sort_order, is_active } = req.body;
+            let { name, slug, excerpt, description, category_id, sort_order, is_active } = req.body;
+            description = fixQuillLists(description);
             await pool.query(
                `UPDATE products SET name=$1, slug=$2, excerpt=$3, description=$4, category_id=$5, sort_order=$6, is_active=$7 WHERE id=$8`,
                [name.trim(), slug.trim(), excerpt, description, category_id || null, sort_order || 0, is_active === 'on', req.params.id]
@@ -623,22 +637,21 @@ router.get('/categories', async (req, res) => {
    });
 
    // =================== ИЗОБРАЖЕНИЯ ТОВАРА (AJAX) ===================
-// Пример правильного кода в admin.js
-router.get('/products/:id/images/list', async (req, res) => {
-   try {
-      const images = await pool.query(
-         `SELECT id, image_url, is_main, sort_order 
+   router.get('/products/:id/images/list', async (req, res) => {
+      try {
+         const images = await pool.query(
+            `SELECT id, image_url, is_main, sort_order 
           FROM product_images 
           WHERE product_id = $1 
           ORDER BY is_main DESC, sort_order`,
-         [req.params.id]
-      );
-      res.json(images.rows);
-   } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: 'Ошибка загрузки изображений' });
-   }
-});
+            [req.params.id]
+         );
+         res.json(images.rows);
+      } catch (err) {
+         console.error(err);
+         res.status(500).json({ error: 'Ошибка загрузки изображений' });
+      }
+   });
 
    router.post('/products/:id/images/upload', upload.array('images', 10), optimizeAndReplace, async (req, res) => {
       try {

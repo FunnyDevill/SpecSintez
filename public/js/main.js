@@ -94,38 +94,85 @@ document.addEventListener('DOMContentLoaded', function () {
 // main.js – обработка всех форм обратной связи
 document.addEventListener('DOMContentLoaded', function () {
    function setupFormAjax(formId) {
-      var form = document.getElementById(formId);
-      if (!form) return;
-      var messageDiv = document.createElement('div');
-      messageDiv.id = formId + '-message';
-      messageDiv.className = 'form-message';
-      form.parentNode.insertBefore(messageDiv, form);
+  var form = document.getElementById(formId);
+  if (!form) return;
 
-      form.addEventListener('submit', async function (e) {
-         e.preventDefault();
-         messageDiv.classList.remove('form-message--visible', 'form-message--success', 'form-message--error');
-         var formData = new FormData(form);
-         var urlEncoded = new URLSearchParams(formData).toString();
-         try {
-            var res = await fetch(form.action, {
-               method: 'POST',
-               headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-               body: urlEncoded
-            });
-            var data = await res.json();
-            if (res.ok) {
-               messageDiv.classList.add('form-message--visible', 'form-message--success');
-               messageDiv.textContent = '✅ Спасибо! Ваша заявка отправлена.';
-               form.reset();
-            } else {
-               throw new Error(data.error || 'Ошибка сервера');
-            }
-         } catch (err) {
-            messageDiv.classList.add('form-message--visible', 'form-message--error');
-            messageDiv.textContent = '❌ ' + (err.message || 'Произошла ошибка');
-         }
+  // Вместо сообщения делаем модальное окно
+  form.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var formData = new FormData(form);
+
+    var name = formData.get('name') || '';
+    var phone = formData.get('phone') || '';
+    var formType = formData.get('form_type') || 'cta';
+
+    function showCtaModal(name, phone, formType, originalForm) {
+  // Удаляем предыдущее окно, если есть
+  var oldOverlay = document.querySelector('.cta-modal-overlay');
+  if (oldOverlay) oldOverlay.remove();
+
+  var overlay = document.createElement('div');
+  overlay.className = 'cta-modal-overlay';
+  overlay.innerHTML = `
+    <div class="cta-modal">
+      <h3>Проверьте данные</h3>
+      <div class="cta-modal__info">
+        <p><strong>Имя:</strong> ${escapeHtml(name)}</p>
+        <p><strong>Телефон:</strong> ${escapeHtml(phone)}</p>
+      </div>
+      <textarea id="ctaModalMessage" rows="4" placeholder="Напишите ваш вопрс (необязательно для заполнения)"></textarea>
+      <div class="cta-modal__buttons">
+        <button class="cta-modal__button cta-modal__button--cancel" id="ctaModalCancel">Отмена</button>
+        <button class="cta-modal__button cta-modal__button--send" id="ctaModalSend">Отправить</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  // Обработка отмены
+  document.getElementById('ctaModalCancel').addEventListener('click', function () {
+    overlay.remove();
+  });
+
+  // Обработка отправки
+  document.getElementById('ctaModalSend').addEventListener('click', async function () {
+    var message = document.getElementById('ctaModalMessage').value;
+    var payload = new URLSearchParams({
+      name: name,
+      phone: phone,
+      message: message,
+      form_type: formType,
+      city: '',
+      email: '',
+      department: ''
+    }).toString();
+
+    try {
+      var res = await fetch(originalForm.action, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: payload
       });
-   }
+      var data = await res.json();
+      overlay.remove();
+      if (res.ok) {
+        alert('✅ Спасибо! Ваша заявка отправлена.');
+        originalForm.reset();
+      } else {
+        alert('❌ ' + (data.error || 'Ошибка сервера'));
+      }
+    } catch (err) {
+      overlay.remove();
+      alert('❌ Произошла ошибка');
+    }
+  });
+}
+
+    // Показываем модальное окно
+    showCtaModal(name, phone, formType, form);
+  });
+}
+
 
    setupFormAjax('contactForm');   // контрактная форма
    setupFormAjax('ctaForm');       // CTA в футере

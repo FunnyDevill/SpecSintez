@@ -527,6 +527,10 @@ legend {
    padding-left: 1.5em !important;
 }
 
+.ql-editor ol[data-list="bullet"] {
+  list-style-type: disc !important;
+}
+
 /* ===== ТАБЛИЦА КАТЕГОРИЙ (АККОРДЕОН) ===== */
 .cat-node.hidden-row {
    display: none;
@@ -657,4 +661,13 @@ hr {
    margin: 30px 0;
    border: 0;
    border-top: 1px solid #ddd;
+}
+
+.tinymce-container {
+  margin-bottom: 20px;
+  min-height: 400px;
+}
+.tox-tinymce {
+  border: 1px solid #ddd !important;
+  border-radius: 4px;
 }
