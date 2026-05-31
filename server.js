@@ -14,6 +14,7 @@ const compression = require('compression');
 const nodemailer = require('nodemailer');
 const adminRouter = require('./admin');
 const crypto = require('crypto');
+const sharp = require('sharp');
 
 const app = express();
 const port = process.env.PORT || 5500;
@@ -24,29 +25,29 @@ if (!isTest) {
    app.use((req, res, next) => {
       const nonce = crypto.randomUUID();
       res.locals.nonce = nonce;
-      req.nonce = nonce;          // <-- добавить эту строку
+      req.nonce = nonce;
       next();
    });
 
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", (req, res) => `'nonce-${res.locals.nonce}'`],
-      styleSrc: ["'self'"],   // ← больше нет 'unsafe-inline'
-      fontSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'"]
-    }
-  }
-}))
+   app.use(helmet({
+      contentSecurityPolicy: {
+         directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", (req, res) => `'nonce-${res.locals.nonce}'`],
+            styleSrc: ["'self'"],
+            fontSrc: ["'self'"],
+            imgSrc: ["'self'", "data:", "https:"],
+            connectSrc: ["'self'"]
+         }
+      }
+   }));
 }
 
 // ========== НАСТРОЙКА ШАБЛОНИЗАТОРА ==========
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// ========== НАСТРОЙКА MULTER ==========
+// ========== НАСТРОЙКА MULTER (ЗАГРУЗКА ИЗОБРАЖЕНИЙ) ==========
 const storage = multer.diskStorage({
    destination: (req, file, cb) => {
       const uploadDir = path.join(__dirname, 'public', 'uploads');
@@ -72,6 +73,30 @@ const upload = multer({
    }
 });
 
+// ========== ОПТИМИЗАЦИЯ ИЗОБРАЖЕНИЙ (SHARP) ==========
+async function optimizeAndReplace(req, res, next) {
+   if (!req.file && !req.files) return next();
+   const files = req.files?.length ? req.files : [req.file].filter(Boolean);
+   try {
+      for (const file of files) {
+         const inputPath = path.join(__dirname, 'public', file.path || `/uploads/${file.filename}`);
+         const outputPath = inputPath;
+         const tempPath = inputPath + '.tmp';
+         await sharp(inputPath)
+            .resize({ width: 1200, withoutEnlargement: true })
+            .jpeg({ quality: 85, progressive: true })
+            .png({ quality: 85 })
+            .webp({ quality: 85 })
+            .toFile(tempPath);
+         fs.unlinkSync(inputPath);
+         fs.renameSync(tempPath, outputPath);
+      }
+      next();
+   } catch (err) {
+      console.error('Ошибка оптимизации изображения:', err);
+      next();
+   }
+}
 
 // ========== СЕССИИ ==========
 app.use(session({
@@ -82,7 +107,13 @@ app.use(session({
 }));
 
 // ========== ПАРСЕРЫ ТЕЛА ==========
-app.use(cors({ origin: '*' }));
+app.use(cors({
+   origin: [
+      'https://specsintez.com',
+      'https://www.specsintez.com',
+      'https://admin.specsintez.com'
+   ]
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -106,7 +137,6 @@ app.post('/api/send-form', async (req, res) => {
 
       const { name, phone, email, city, message, department, form_type } = req.body;
 
-      // Валидация российского номера телефона
       const phonePattern = /^(\+7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}$/;
       if (!phone || !phonePattern.test(phone.trim())) {
          return res.status(400).json({ error: 'Введите корректный номер телефона (например, +7 (123) 456-78-90)' });
@@ -136,7 +166,7 @@ app.post('/api/send-form', async (req, res) => {
 });
 
 // ========== ПУБЛИЧНАЯ СТАТИКА ==========
-app.use(express.static(path.join(__dirname, 'public'))); 
+app.use(express.static(path.join(__dirname, 'public')));
 app.use('/quill', express.static(path.join(__dirname, 'node_modules/quill/dist')));
 app.use('/login-assets', express.static(path.join(__dirname, 'public', 'login-assets')));
 
@@ -239,10 +269,13 @@ app.get('/api/categories', async (req, res) => {
 });
 
 app.get('/api/products', async (req, res) => {
-   const { category_id, all } = req.query;
+   const { category_id, all, search } = req.query;
    try {
-      let query, params;
-      if (category_id) {
+      let query, params = [];
+      if (search) {
+         query = `SELECT p.* FROM products p WHERE p.is_active = true AND LOWER(p.name) = LOWER($1) ORDER BY p.sort_order, p.id`;
+         params = [search.trim()];
+      } else if (category_id) {
          query = `
             WITH RECURSIVE cat_tree AS (
                 SELECT id FROM categories WHERE id = $1
@@ -360,16 +393,11 @@ app.get('/product/:slug', (req, res) => {
 
 // ========== ЕДИНЫЙ ОБРАБОТЧИК ОШИБОК ==========
 app.use((err, req, res, next) => {
-  // Логируем полный стек ошибки
-  console.error('Unhandled error:', err.stack);
-
-  // Если ошибка CSRF – специальное сообщение
-  if (err.code === 'EBADCSRFTOKEN') {
-    return res.status(403).json({ error: 'Недействительный CSRF-токен' });
-  }
-
-  // Для всего остального – общая ошибка сервера
-  res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+   console.error('Unhandled error:', err.stack);
+   if (err.code === 'EBADCSRFTOKEN') {
+      return res.status(403).json({ error: 'Недействительный CSRF-токен' });
+   }
+   res.status(500).json({ error: 'Внутренняя ошибка сервера' });
 });
 
 // ========== ЭКСПОРТ ДЛЯ ТЕСТОВ ==========
@@ -377,7 +405,7 @@ module.exports = app;
 
 // ========== ЗАПУСК ==========
 if (require.main === module) {
-  app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
-  });
+   app.listen(port, () => {
+      console.log(`Server running at http://localhost:${port}`);
+   });
 }

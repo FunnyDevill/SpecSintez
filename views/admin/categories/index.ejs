@@ -7,7 +7,7 @@
          <th></th>
          <th>ID</th>
          <th>Название</th>
-         <th>Slug</th>
+         <th>Код для ссылки</th>
          <th>Иконка</th>
          <th>Родитель</th>
          <th>Сорт.</th>
@@ -28,15 +28,14 @@
             <td>
                <%= cat.id %>
             </td>
-            <td style="padding-left: <%= cat.level * 20 %>px;">
+            <td class="cat-name-cell">
                <%= cat.name %>
             </td>
             <td>
                <%= cat.slug %>
             </td>
             <td>
-               <% if (cat.icon_svg) { %><img src="<%= cat.icon_svg %>" style="height: 24px;">
-                  <% } else { %>—<% } %>
+               <% if (cat.icon_svg) { %><img src="<%= cat.icon_svg %>" class="cat-icon"><% } else { %>—<% } %>
             </td>
             <td>
                <%= cat.parent_id || '-' %>
@@ -49,7 +48,7 @@
             </td>
             <td class="actions">
                <a href="/admin/categories/<%= cat.id %>/edit" class="btn-small">✏️</a>
-               <form method="POST" action="/admin/categories/<%= cat.id %>/delete" style="display:inline;">
+               <form method="POST" action="/admin/categories/<%= cat.id %>/delete" class="inline-form">
                   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                   <button type="submit" class="btn-small btn-danger">🗑️</button>
                </form>
@@ -59,37 +58,7 @@
    </tbody>
 </table>
 
-<style>
-   .cat-node.hidden-row {
-      display: none;
-   }
-
-   .toggle-btn {
-      background: none;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
-      width: 24px;
-      height: 24px;
-   }
-
-   .toggle-btn:hover {
-      background-color: #e0e0e0;
-   }
-
-   .no-children {
-      display: inline-block;
-      width: 24px;
-      height: 24px;
-   }
-
-   .data-table th:first-child {
-      width: 40px;
-   }
-</style>
-
-<script>
+<script nonce="<%= nonce %>">
    document.addEventListener('DOMContentLoaded', function () {
       const rows = document.querySelectorAll('.cat-node');
       const rowMap = new Map();

@@ -6,7 +6,7 @@
       <tr>
          <th>ID</th>
          <th>Заголовок</th>
-         <th>Slug</th>
+         <th>Код для ссылки</th>
          <th>Дата</th>
          <th>Активна</th>
          <th>Hero</th>
@@ -24,7 +24,7 @@
             <td><%= n.is_hero ? '⭐' : '' %></td>
             <td class="actions">
                <a href="/admin/news/<%= n.id %>/edit" class="btn-small">✏️</a>
-               <form method="POST" action="/admin/news/<%= n.id %>/delete" style="display:inline;">
+               <form method="POST" action="/admin/news/<%= n.id %>/delete" class="inline-form">
                   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                   <button type="submit" class="btn-small btn-danger">🗑️</button>
                </form>

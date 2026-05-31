@@ -48,8 +48,9 @@
 }
 
 .footer-column .logo-icon--footer {
-  width: 56px;
-  height: 56px;
+  width: 70px;
+  height: 70px;
+  filter: invert(70%) sepia(46%) saturate(5000%) hue-rotate(155deg) brightness(95%) contrast(85%);
 }
 
 .social-links {

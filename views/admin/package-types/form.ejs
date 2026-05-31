@@ -1,114 +1,122 @@
-<% if (typeof errors !== 'undefined' && errors.length > 0) { %>
-  <div class="form-errors">
-    <strong>Ошибки:</strong>
-    <ul>
-      <% errors.forEach(err => { %>
-        <li><%= err %></li>
-      <% }); %>
-    </ul>
-  </div>
-<% } %>
+<% if (typeof errors !=='undefined' && errors.length> 0) { %>
+   <div class="form-errors">
+      <strong>Ошибки:</strong>
+      <ul>
+         <% errors.forEach(err=> { %>
+            <li>
+               <%= err %>
+            </li>
+            <% }); %>
+      </ul>
+   </div>
+   <% } %>
 
-<h1><%= type ? 'Редактирование типа упаковки' : 'Создание типа упаковки' %></h1>
+      <h1>
+         <%= type ? 'Редактирование типа упаковки' : 'Создание типа упаковки' %>
+      </h1>
 
-<form method="POST" action="<%= action %>" enctype="multipart/form-data" id="package-type-form">
-  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <form method="POST" action="<%= action %>" enctype="multipart/form-data" id="package-type-form">
+         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
-  <div class="form-group">
-    <label for="name">Название *</label>
-    <input type="text" id="name" name="name" value="<%= type ? type.name : '' %>" required>
-  </div>
+         <div class="form-group">
+            <label for="name">Название *</label>
+            <input type="text" id="name" name="name" value="<%= type ? type.name : '' %>" required>
+         </div>
 
-  <% if (type && type.icon_url) { %>
-    <div class="form-group">
-      <label>Текущая иконка</label>
-      <div class="current-icon-block">
-        <img src="<%= type.icon_url %>" alt="Текущая иконка" id="current-icon-img" style="max-height: 60px; max-width: 200px; object-fit: contain; border: 1px solid #ddd; border-radius: 4px; padding: 4px;">
-        <button type="button" id="remove-icon-btn" class="btn-small btn-danger" style="margin-left: 10px;">✖ Удалить иконку</button>
-        <input type="hidden" name="remove_icon" id="remove-icon-flag" value="false">
-      </div>
-      <small>Вы можете удалить текущую иконку или загрузить новую ниже.</small>
-    </div>
-  <% } %>
+         <% if (type && type.icon_url) { %>
+            <div class="form-group">
+               <label>Текущая иконка</label>
+               <div class="current-icon-block">
+                  <img src="<%= type.icon_url %>" alt="Текущая иконка" id="current-icon-img"
+                     class="current-icon-preview">
+                  <button type="button" id="remove-icon-btn" class="btn-small btn-danger ml-10">✖ Удалить
+                     иконку</button>
+                  <input type="hidden" name="remove_icon" id="remove-icon-flag" value="false">
+               </div>
+               <small>Вы можете удалить текущую иконку или загрузить новую ниже.</small>
+            </div>
+            <% } %>
 
-  <div class="form-group">
-    <label><%= type && type.icon_url ? 'Загрузить новую иконку (заменит текущую)' : 'Иконка' %></label>
-    <div class="image-upload-area" id="icon-upload-area">
-      <input type="file" name="icon" id="icon-file-input" accept="image/*" style="display: none;">
-      <div class="upload-placeholder" id="icon-placeholder">
-        <span>📷</span>
-        <p>Перетащите иконку сюда или нажмите для выбора</p>
-        <small>Поддерживаются JPG, PNG, SVG, WebP</small>
-      </div>
-      <img id="icon-preview" class="image-preview" src="" alt="Предпросмотр новой иконки" style="display: none;">
-    </div>
-  </div>
+               <div class="form-group">
+                  <label>
+                     <%= type && type.icon_url ? 'Загрузить новую иконку (заменит текущую)' : 'Иконка' %>
+                  </label>
+                  <div class="image-upload-area" id="icon-upload-area">
+                     <input type="file" name="icon" id="icon-file-input" accept="image/*" class="hidden">
+                     <div class="upload-placeholder" id="icon-placeholder">
+                        <span>📷</span>
+                        <p>Перетащите иконку сюда или нажмите для выбора</p>
+                        <small>Поддерживаются JPG, PNG, SVG, WebP</small>
+                     </div>
+                     <img id="icon-preview" class="image-preview hidden" src="" alt="Предпросмотр новой иконки">
+                  </div>
+               </div>
 
-  <div class="form-actions">
-    <button type="submit" class="btn">Сохранить</button>
-    <a href="/admin/package-types" class="btn-cancel">Отмена</a>
-  </div>
-</form>
+               <div class="form-actions">
+                  <button type="submit" class="btn">Сохранить</button>
+                  <a href="/admin/package-types" class="btn-cancel">Отмена</a>
+               </div>
+      </form>
 
-<script nonce="<%= nonce %>">
-  document.addEventListener('DOMContentLoaded', function () {
-    var uploadArea = document.getElementById('icon-upload-area');
-    var fileInput = document.getElementById('icon-file-input');
-    var placeholder = document.getElementById('icon-placeholder');
-    var newPreview = document.getElementById('icon-preview');
-    var currentIconImg = document.getElementById('current-icon-img');
-    var removeBtn = document.getElementById('remove-icon-btn');
-    var removeFlag = document.getElementById('remove-icon-flag');
+      <script nonce="<%= nonce %>">
+         document.addEventListener('DOMContentLoaded', function () {
+            var uploadArea = document.getElementById('icon-upload-area');
+            var fileInput = document.getElementById('icon-file-input');
+            var placeholder = document.getElementById('icon-placeholder');
+            var newPreview = document.getElementById('icon-preview');
+            var currentIconImg = document.getElementById('current-icon-img');
+            var removeBtn = document.getElementById('remove-icon-btn');
+            var removeFlag = document.getElementById('remove-icon-flag');
 
-    uploadArea.addEventListener('click', function (e) {
-      if (e.target !== removeBtn) fileInput.click();
-    });
+            uploadArea.addEventListener('click', function (e) {
+               if (e.target !== removeBtn) fileInput.click();
+            });
 
-    fileInput.addEventListener('change', function () {
-      if (this.files.length > 0) handleFile(this.files[0]);
-    });
+            fileInput.addEventListener('change', function () {
+               if (this.files.length > 0) handleFile(this.files[0]);
+            });
 
-    uploadArea.addEventListener('dragover', function (e) {
-      e.preventDefault();
-      uploadArea.classList.add('dragover');
-    });
-    uploadArea.addEventListener('dragleave', function () {
-      uploadArea.classList.remove('dragover');
-    });
-    uploadArea.addEventListener('drop', function (e) {
-      e.preventDefault();
-      uploadArea.classList.remove('dragover');
-      var file = e.dataTransfer.files[0];
-      if (file) handleFile(file);
-    });
+            uploadArea.addEventListener('dragover', function (e) {
+               e.preventDefault();
+               uploadArea.classList.add('dragover');
+            });
+            uploadArea.addEventListener('dragleave', function () {
+               uploadArea.classList.remove('dragover');
+            });
+            uploadArea.addEventListener('drop', function (e) {
+               e.preventDefault();
+               uploadArea.classList.remove('dragover');
+               var file = e.dataTransfer.files[0];
+               if (file) handleFile(file);
+            });
 
-    function handleFile(file) {
-      if (!file || !file.type.startsWith('image/')) {
-        alert('Пожалуйста, выберите изображение');
-        return;
-      }
-      var reader = new FileReader();
-      reader.onload = function (e) {
-        newPreview.src = e.target.result;
-        newPreview.style.display = 'block';
-        placeholder.style.display = 'none';
-        if (removeBtn) {
-          removeBtn.style.display = 'none';
-          removeFlag.value = 'false';
-        }
-        if (currentIconImg) {
-          currentIconImg.style.display = 'none';
-        }
-      };
-      reader.readAsDataURL(file);
-    }
+            function handleFile(file) {
+               if (!file || !file.type.startsWith('image/')) {
+                  alert('Пожалуйста, выберите изображение');
+                  return;
+               }
+               var reader = new FileReader();
+               reader.onload = function (e) {
+                  newPreview.src = e.target.result;
+                  newPreview.classList.remove('hidden');
+                  placeholder.classList.add('hidden');
+                  if (removeBtn) {
+                     removeBtn.classList.add('hidden');
+                     removeFlag.value = 'false';
+                  }
+                  if (currentIconImg) {
+                     currentIconImg.classList.add('hidden');
+                  }
+               };
+               reader.readAsDataURL(file);
+            }
 
-    if (removeBtn) {
-      removeBtn.addEventListener('click', function () {
-        if (currentIconImg) currentIconImg.style.display = 'none';
-        removeBtn.style.display = 'none';
-        removeFlag.value = 'true';
-      });
-    }
-  });
-</script>
+            if (removeBtn) {
+               removeBtn.addEventListener('click', function () {
+                  if (currentIconImg) currentIconImg.classList.add('hidden');
+                  removeBtn.classList.add('hidden');
+                  removeFlag.value = 'true';
+               });
+            }
+         });
+      </script>

@@ -104,8 +104,8 @@ module.exports = (upload) => {
    });
 
    router.post('/news/create',
-      optimizeAndReplace,
       upload.single('image'),
+      optimizeAndReplace,
       requireFields('title', 'slug'),
       checkSlugUnique('news', 'slug'),
       async (req, res) => {
@@ -155,8 +155,8 @@ module.exports = (upload) => {
    });
 
    router.post('/news/:id/edit',
-      optimizeAndReplace,
       upload.single('image'),
+      optimizeAndReplace,
       requireFields('title', 'slug'),
       checkSlugUnique('news', 'slug', 'id'),
       async (req, res) => {
@@ -223,38 +223,38 @@ module.exports = (upload) => {
    });
 
    // =================== КАТЕГОРИИ ===================
-   router.get('/categories', async (req, res) => {
-      try {
-         const result = await pool.query(`
-            WITH RECURSIVE cat_tree AS (
-                SELECT 
-                    c.id, c.name, c.slug, c.parent_id, c.sort_order, c.is_active, 
-                    c.description, c.image_url, c.icon_svg,
-                    0 AS level, 
-                    ARRAY[c.id] AS path,
-                    EXISTS(SELECT 1 FROM categories WHERE parent_id = c.id) AS has_children
-                FROM categories c
-                WHERE c.parent_id IS NULL
-                UNION ALL
-                SELECT 
-                    c.id, c.name, c.slug, c.parent_id, c.sort_order, c.is_active,
-                    c.description, c.image_url, c.icon_svg,
-                    ct.level + 1,
-                    ct.path || c.id,
-                    EXISTS(SELECT 1 FROM categories WHERE parent_id = c.id) AS has_children
-                FROM categories c
-                INNER JOIN cat_tree ct ON c.parent_id = ct.id
-            )
-            SELECT * FROM cat_tree ORDER BY path
-         `);
-         const allCats = await pool.query('SELECT id, name FROM categories ORDER BY name');
-         const body = await renderBody('admin/categories/index.ejs', { categories: result.rows, allCategories: allCats.rows }, req);
-         res.render('admin/layout', { title: 'Категории', body, currentSection: 'categories' });
-      } catch (err) {
-         console.error(err);
-         res.status(500).send('Ошибка загрузки категорий');
-      }
-   });
+router.get('/categories', async (req, res) => {
+   try {
+      const result = await pool.query(`
+         WITH RECURSIVE cat_tree AS (
+             SELECT 
+                 c.id, c.name, c.slug, c.parent_id, c.sort_order, c.is_active, 
+                 c.description, c.icon_svg,
+                 0 AS level, 
+                 ARRAY[c.id] AS path,
+                 EXISTS(SELECT 1 FROM categories WHERE parent_id = c.id) AS has_children
+             FROM categories c
+             WHERE c.parent_id IS NULL
+             UNION ALL
+             SELECT 
+                 c.id, c.name, c.slug, c.parent_id, c.sort_order, c.is_active,
+                 c.description, c.icon_svg,
+                 ct.level + 1,
+                 ct.path || c.id,
+                 EXISTS(SELECT 1 FROM categories WHERE parent_id = c.id) AS has_children
+             FROM categories c
+             INNER JOIN cat_tree ct ON c.parent_id = ct.id
+         )
+         SELECT * FROM cat_tree ORDER BY path
+      `);
+      const allCats = await pool.query('SELECT id, name FROM categories ORDER BY name');
+      const body = await renderBody('admin/categories/index.ejs', { categories: result.rows, allCategories: allCats.rows }, req);
+      res.render('admin/layout', { title: 'Категории', body, currentSection: 'categories' });
+   } catch (err) {
+      console.error(err);
+      res.status(500).send('Ошибка загрузки категорий');
+   }
+});
 
    router.get('/categories/create', async (req, res) => {
       const parents = await pool.query('SELECT id, name FROM categories ORDER BY name');
@@ -268,8 +268,8 @@ module.exports = (upload) => {
    });
 
    router.post('/categories/create',
-      optimizeAndReplace,
       upload.single('icon'),
+      optimizeAndReplace,
       requireFields('name', 'slug'),
       checkSlugUnique('categories', 'slug'),
       async (req, res) => {
@@ -426,11 +426,14 @@ module.exports = (upload) => {
 
    router.get('/products/create', async (req, res) => {
       const categories = await getCategoriesWithLevel();
+      const allPackageTypes = await pool.query('SELECT * FROM package_types ORDER BY name');
       const body = await renderBody('admin/products/form.ejs', {
          product: null,
          action: '/admin/products/create',
          categories: categories,
          selectedCategories: [],
+         allPackageTypes: allPackageTypes.rows,
+         selectedPackageTypes: [],
          errors: []
       }, req);
       res.render('admin/layout', { title: 'Создание товара', body, currentSection: 'products' });
@@ -444,12 +447,15 @@ module.exports = (upload) => {
             const errors = req.validationErrors || [];
             if (errors.length > 0) {
                const categories = await getCategoriesWithLevel();
+               const allPackageTypes = await pool.query('SELECT * FROM package_types ORDER BY name');
                const body = await renderBody('admin/products/form.ejs', {
                   product: req.body,
                   errors,
                   action: '/admin/products/create',
                   categories,
-                  selectedCategories: req.body.categories || []
+                  selectedCategories: req.body.categories || [],
+                  allPackageTypes: allPackageTypes.rows,
+                  selectedPackageTypes: []
                }, req);
                return res.render('admin/layout', { title: 'Создание товара', body, currentSection: 'products' });
             }
@@ -462,6 +468,7 @@ module.exports = (upload) => {
             );
             const productId = result.rows[0].id;
 
+            // Сохраняем отрасли
             let categoryIds = [];
             if (req.body.categories) {
                categoryIds = Array.isArray(req.body.categories) ? req.body.categories : [req.body.categories];
@@ -471,6 +478,24 @@ module.exports = (upload) => {
                   await pool.query('INSERT INTO product_categories (product_id, category_id) VALUES ($1, $2)', [productId, catId]);
                }
             }
+
+            // Сохраняем типы упаковок и объёмы
+            let pkgTypeIds = [];
+            if (req.body.package_type_ids) {
+               pkgTypeIds = Array.isArray(req.body.package_type_ids) ? req.body.package_type_ids : [req.body.package_type_ids];
+            }
+            const volumesMap = {};
+            for (const key in req.body) {
+               if (key.startsWith('volume_')) {
+                  const typeId = key.split('_')[1];
+                  volumesMap[typeId] = req.body[key] ? req.body[key].trim() : '';
+               }
+            }
+            for (const ptid of pkgTypeIds) {
+               const volume = volumesMap[ptid] || '';
+               await pool.query('INSERT INTO product_package_types (product_id, package_type_id, volume) VALUES ($1, $2, $3)', [productId, ptid, volume]);
+            }
+
             res.redirect(`/admin/products/${productId}/edit`);
          } catch (err) {
             console.error(err);
@@ -486,11 +511,16 @@ module.exports = (upload) => {
          const allCategories = await getCategoriesWithLevel();
          const selectedCategoriesRes = await pool.query('SELECT category_id FROM product_categories WHERE product_id = $1', [req.params.id]);
          const selectedCategories = selectedCategoriesRes.rows.map(row => row.category_id);
+         const allPackageTypes = await pool.query('SELECT * FROM package_types ORDER BY name');
+         const selectedPackageTypesRes = await pool.query('SELECT package_type_id, volume FROM product_package_types WHERE product_id = $1', [req.params.id]);
+         const selectedPackageTypes = selectedPackageTypesRes.rows;
          const body = await renderBody('admin/products/form.ejs', {
             product: product.rows[0],
             action: `/admin/products/${req.params.id}/edit`,
             categories: allCategories,
             selectedCategories: selectedCategories,
+            allPackageTypes: allPackageTypes.rows,
+            selectedPackageTypes: selectedPackageTypes,
             errors: []
          }, req);
          res.render('admin/layout', { title: 'Редактирование товара', body, currentSection: 'products' });
@@ -510,13 +540,18 @@ module.exports = (upload) => {
                const allCategories = await getCategoriesWithLevel();
                const selectedCategoriesRes = await pool.query('SELECT category_id FROM product_categories WHERE product_id = $1', [req.params.id]);
                const selectedCategories = selectedCategoriesRes.rows.map(row => row.category_id);
+               const allPackageTypes = await pool.query('SELECT * FROM package_types ORDER BY name');
+               const selectedPackageTypesRes = await pool.query('SELECT package_type_id, volume FROM product_package_types WHERE product_id = $1', [req.params.id]);
+               const selectedPackageTypes = selectedPackageTypesRes.rows;
                const product = await pool.query('SELECT * FROM products WHERE id = $1', [req.params.id]);
                const body = await renderBody('admin/products/form.ejs', {
                   product: { ...product.rows[0], ...req.body },
                   errors,
                   action: `/admin/products/${req.params.id}/edit`,
                   categories: allCategories,
-                  selectedCategories
+                  selectedCategories,
+                  allPackageTypes: allPackageTypes.rows,
+                  selectedPackageTypes: selectedPackageTypes
                }, req);
                return res.render('admin/layout', { title: 'Редактирование товара', body, currentSection: 'products' });
             }
@@ -527,6 +562,7 @@ module.exports = (upload) => {
                [name.trim(), slug.trim(), excerpt, description, category_id || null, sort_order || 0, is_active === 'on', req.params.id]
             );
 
+            // Обновляем отрасли
             await pool.query('DELETE FROM product_categories WHERE product_id = $1', [req.params.id]);
             let categoryIds = [];
             if (req.body.categories) {
@@ -537,6 +573,25 @@ module.exports = (upload) => {
                   await pool.query('INSERT INTO product_categories (product_id, category_id) VALUES ($1, $2)', [req.params.id, catId]);
                }
             }
+
+            // Обновляем типы упаковок и объёмы
+            await pool.query('DELETE FROM product_package_types WHERE product_id = $1', [req.params.id]);
+            let pkgTypeIds = [];
+            if (req.body.package_type_ids) {
+               pkgTypeIds = Array.isArray(req.body.package_type_ids) ? req.body.package_type_ids : [req.body.package_type_ids];
+            }
+            const volumesMap = {};
+            for (const key in req.body) {
+               if (key.startsWith('volume_')) {
+                  const typeId = key.split('_')[1];
+                  volumesMap[typeId] = req.body[key] ? req.body[key].trim() : '';
+               }
+            }
+            for (const ptid of pkgTypeIds) {
+               const volume = volumesMap[ptid] || '';
+               await pool.query('INSERT INTO product_package_types (product_id, package_type_id, volume) VALUES ($1, $2, $3)', [req.params.id, ptid, volume]);
+            }
+
             res.redirect('/admin/products');
          } catch (err) {
             console.error(err);
@@ -568,18 +623,22 @@ module.exports = (upload) => {
    });
 
    // =================== ИЗОБРАЖЕНИЯ ТОВАРА (AJAX) ===================
-   router.get('/products/:id/images/list', async (req, res) => {
-      try {
-         const images = await pool.query(
-            `SELECT id, image_url, is_main, sort_order FROM product_images WHERE product_id = $1 ORDER BY sort_order`,
-            [req.params.id]
-         );
-         res.json(images.rows);
-      } catch (err) {
-         console.error(err);
-         res.status(500).json({ error: 'Ошибка загрузки изображений' });
-      }
-   });
+// Пример правильного кода в admin.js
+router.get('/products/:id/images/list', async (req, res) => {
+   try {
+      const images = await pool.query(
+         `SELECT id, image_url, is_main, sort_order 
+          FROM product_images 
+          WHERE product_id = $1 
+          ORDER BY is_main DESC, sort_order`,
+         [req.params.id]
+      );
+      res.json(images.rows);
+   } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Ошибка загрузки изображений' });
+   }
+});
 
    router.post('/products/:id/images/upload', upload.array('images', 10), optimizeAndReplace, async (req, res) => {
       try {
@@ -674,8 +733,8 @@ module.exports = (upload) => {
    });
 
    router.post('/package-types/create',
-      optimizeAndReplace,
       upload.single('icon'),
+      optimizeAndReplace,
       requireFields('name'),
       async (req, res) => {
          try {
@@ -721,8 +780,8 @@ module.exports = (upload) => {
    });
 
    router.post('/package-types/:id/edit',
-      optimizeAndReplace,
       upload.single('icon'),
+      optimizeAndReplace,
       requireFields('name'),
       async (req, res) => {
          try {
@@ -795,57 +854,6 @@ module.exports = (upload) => {
       } catch (err) {
          console.error(err);
          res.status(500).send('Ошибка удаления');
-      }
-   });
-
-   // =================== ПРИВЯЗКА ТИПОВ УПАКОВОК К ТОВАРУ ===================
-   router.get('/products/:id/package-types', async (req, res) => {
-      try {
-         const product = await pool.query('SELECT id, name FROM products WHERE id = $1', [req.params.id]);
-         if (product.rows.length === 0) return res.status(404).send('Товар не найден');
-         const allTypes = await pool.query('SELECT * FROM package_types ORDER BY name');
-         const selected = await pool.query(
-            'SELECT package_type_id, volume FROM product_package_types WHERE product_id = $1',
-            [req.params.id]
-         );
-         const body = await renderBody('admin/products/package-types.ejs', {
-            product: product.rows[0],
-            allTypes: allTypes.rows,
-            selected: selected.rows
-         }, req);
-         res.render('admin/layout', { title: `Типы упаковок для ${product.rows[0].name}`, body, currentSection: 'products' });
-      } catch (err) {
-         console.error(err);
-         res.status(500).send('Ошибка загрузки');
-      }
-   });
-
-   router.post('/products/:id/package-types', async (req, res) => {
-      try {
-         const productId = req.params.id;
-         let ids = [];
-         if (req.body.package_type_ids) {
-            ids = Array.isArray(req.body.package_type_ids) ? req.body.package_type_ids : [req.body.package_type_ids];
-         }
-         const volumesMap = {};
-         for (const key in req.body) {
-            if (key.startsWith('volume_')) {
-               const typeId = key.split('_')[1];
-               volumesMap[typeId] = req.body[key] ? req.body[key].trim() : '';
-            }
-         }
-         await pool.query('DELETE FROM product_package_types WHERE product_id = $1', [productId]);
-         for (const ptid of ids) {
-            const volume = volumesMap[ptid] || '';
-            await pool.query(
-               'INSERT INTO product_package_types (product_id, package_type_id, volume) VALUES ($1, $2, $3)',
-               [productId, ptid, volume]
-            );
-         }
-         res.redirect(`/admin/products/${productId}/edit`);
-      } catch (err) {
-         console.error(err);
-         res.status(500).send('Ошибка сохранения');
       }
    });
 

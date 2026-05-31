@@ -10,26 +10,21 @@
       </tr>
    </thead>
    <tbody>
-      <% types.forEach(t=> { %>
+      <% types.forEach(t => { %>
          <tr>
+            <td><%= t.id %></td>
+            <td><%= t.name %></td>
             <td>
-               <%= t.id %>
-            </td>
-            <td>
-               <%= t.name %>
-            </td>
-            <td>
-               <% if (t.icon_url) { %><img src="<%= t.icon_url %>" style="height:30px;">
-                  <% } else { %>—<% } %>
+               <% if (t.icon_url) { %><img src="<%= t.icon_url %>" class="pkg-icon"><% } else { %>—<% } %>
             </td>
             <td class="actions">
                <a href="/admin/package-types/<%= t.id %>/edit" class="btn-small">✏️</a>
-               <form method="POST" action="/admin/package-types/<%= t.id %>/delete" style="display:inline;">
+               <form method="POST" action="/admin/package-types/<%= t.id %>/delete" class="inline-form">
                   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                   <button type="submit" class="btn-small btn-danger">🗑️</button>
                </form>
             </td>
          </tr>
-         <% }); %>
+      <% }); %>
    </tbody>
 </table>
