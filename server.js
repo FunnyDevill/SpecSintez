@@ -15,7 +15,6 @@ const adminRouter = require('./admin');
 const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
 
-
 const app = express();
 const port = process.env.PORT || 5500;
 const isTest = process.env.NODE_ENV === 'test';
@@ -54,7 +53,6 @@ if (!isTest) {
       next();
    });
 
-   // Строгая CSP для публичной части (по умолчанию)
    app.use(helmet({
       contentSecurityPolicy: {
          directives: {
@@ -67,20 +65,6 @@ if (!isTest) {
          }
       }
    }));
-
-   // Отдельная CSP для админ-панели: разрешаем 'unsafe-inline' для стилей
-   app.use('/admin', (req, res, next) => {
-      helmet.contentSecurityPolicy({
-         directives: {
-            defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", (req, res) => `'nonce-${res.locals.nonce}'`],
-            styleSrc: ["'self'", "'unsafe-inline'"],  // ← нужно для Quill
-            fontSrc: ["'self'"],
-            imgSrc: ["'self'", "data:", "https:"],
-            connectSrc: ["'self'"]
-         }
-      })(req, res, next);
-   });
 }
 
 // ========== НАСТРОЙКА ШАБЛОНИЗАТОРА ==========
@@ -184,10 +168,8 @@ app.post('/api/send-form', async (req, res) => {
 // ========== ПУБЛИЧНАЯ СТАТИКА ==========
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/quill', express.static(path.join(__dirname, 'node_modules/quill/dist')));
-app.use('/login-assets', express.static(path.join(__dirname, 'public', 'login-assets')));
-
-// ========== TinyMCE ==========
 app.use('/tinymce', express.static(path.join(__dirname, 'node_modules/tinymce')));
+app.use('/login-assets', express.static(path.join(__dirname, 'public', 'login-assets')));
 
 // ========== МАРШРУТЫ ЛОГИНА ==========
 app.get('/admin/login', (req, res) => {
@@ -288,17 +270,19 @@ app.get('/api/products', async (req, res) => {
    try {
       let query, params = [];
       if (search) {
-         query = `SELECT p.* FROM products p WHERE p.is_active = true AND LOWER(p.name) = LOWER($1) ORDER BY p.sort_order, p.id`;
-         params = [search.trim()];
+         query = `SELECT p.* FROM products p WHERE p.is_active = true AND p.name ILIKE $1 ORDER BY p.sort_order, p.id`;
+         params = [`%${search.trim()}%`];
       } else if (category_id) {
+         // Рекурсивно получаем все дочерние категории, а также товары, привязанные через product_categories
          query = `
             WITH RECURSIVE cat_tree AS (
                 SELECT id FROM categories WHERE id = $1
                 UNION ALL
                 SELECT c.id FROM categories c INNER JOIN cat_tree ct ON c.parent_id = ct.id
             )
-            SELECT p.* FROM products p
-            WHERE p.category_id IN (SELECT id FROM cat_tree)
+            SELECT DISTINCT p.* FROM products p
+            LEFT JOIN product_categories pc ON p.id = pc.product_id
+            WHERE (p.category_id IN (SELECT id FROM cat_tree) OR pc.category_id IN (SELECT id FROM cat_tree))
             ${all ? '' : 'AND p.is_active = true'}
             ORDER BY p.sort_order, p.id
          `;
@@ -350,29 +334,60 @@ app.get('/api/products-by-slug/:slug', async (req, res) => {
       if (productResult.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
       const product = productResult.rows[0];
 
+      // Получаем все категории товара (прямые связи)
       const categoriesResult = await pool.query(`
-          WITH RECURSIVE roots AS (
-              SELECT category_id as id
-              FROM product_categories
-              WHERE product_id = $1
-              UNION
-              SELECT c.parent_id
-              FROM roots r
-              JOIN categories c ON r.id = c.id
-              WHERE c.parent_id IS NOT NULL
-          )
-          SELECT DISTINCT c.id, c.name, c.slug, c.icon_svg
-          FROM categories c
-          WHERE c.id IN (SELECT id FROM roots)
-          AND c.parent_id IS NULL
+         SELECT c.id, c.name, c.slug, c.icon_svg, c.parent_id
+         FROM product_categories pc
+         JOIN categories c ON pc.category_id = c.id
+         WHERE pc.product_id = $1
       `, [product.id]);
 
-      product.categories = categoriesResult.rows.map(row => ({
-         id: row.id,
-         slug: row.slug,
-         name: row.name,
-         icon_svg: row.icon_svg
-      }));
+      // Если есть основная категория, добавляем и её
+      if (product.category_id) {
+         const mainCat = await pool.query('SELECT id, name, slug, icon_svg, parent_id FROM categories WHERE id = $1', [product.category_id]);
+         if (mainCat.rows.length > 0) {
+            const alreadyExists = categoriesResult.rows.some(c => c.id === mainCat.rows[0].id);
+            if (!alreadyExists) {
+               categoriesResult.rows.push(mainCat.rows[0]);
+            }
+         }
+      }
+
+      // Оставляем только корневые категории (parent_id IS NULL)
+      const rootCategories = categoriesResult.rows.filter(cat => cat.parent_id === null);
+
+      // Для каждой корневой категории находим конечную подкатегорию, к которой привязан товар
+      const categoriesWithChildren = await Promise.all(
+         rootCategories.map(async (cat) => {
+            const childRes = await pool.query(`
+         WITH RECURSIVE sub AS (
+            SELECT c.id, c.name, c.slug, c.icon_svg, c.parent_id
+            FROM categories c
+            JOIN product_categories pc ON c.id = pc.category_id
+            WHERE pc.product_id = $1 AND c.parent_id = $2
+            UNION ALL
+            SELECT c.id, c.name, c.slug, c.icon_svg, c.parent_id
+            FROM categories c
+            INNER JOIN sub ON c.parent_id = sub.id
+            JOIN product_categories pc ON c.id = pc.category_id
+            WHERE pc.product_id = $1
+         )
+         SELECT * FROM sub
+         WHERE id NOT IN (SELECT DISTINCT parent_id FROM categories WHERE parent_id IS NOT NULL)
+         LIMIT 1
+      `, [product.id, cat.id]);
+
+            if (childRes.rows.length > 0) {
+               return {
+                  ...cat,
+                  childCategory: childRes.rows[0]  // конечная подкатегория, привязанная к товару
+               };
+            }
+            return cat; // если не нашли дочерних — оставляем корневую
+         })
+      );
+
+      product.categories = categoriesWithChildren;
 
       const packageTypesResult = await pool.query(`
          SELECT pt.id, pt.name, pt.icon_url, ppt.volume
