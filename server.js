@@ -14,6 +14,8 @@ const nodemailer = require('nodemailer');
 const adminRouter = require('./admin');
 const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
+const cache = require('./cache');
+const cacheControl = require('./middleware/cacheControl');
 
 const app = express();
 const port = process.env.PORT || 5500;
@@ -21,19 +23,16 @@ const isTest = process.env.NODE_ENV === 'test';
 
 // ========== СОБСТВЕННАЯ CSRF-ЗАЩИТА (без внешних пакетов) ==========
 function customCsrfProtection(req, res, next) {
-   // Для GET‑запросов генерируем токен, сохраняем в сессии и ставим куку
    if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') {
       if (!req.session.csrfToken) {
          req.session.csrfToken = crypto.randomUUID();
       }
-      // Устанавливаем куку, чтобы она была доступна на всех страницах админки
       res.cookie('csrfToken', req.session.csrfToken, { httpOnly: true, sameSite: 'strict' });
       res.locals.csrfToken = req.session.csrfToken;
       req.csrfToken = req.session.csrfToken;
       return next();
    }
 
-   // Для изменяющих методов проверяем токен из куки
    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
       const token = req.cookies.csrfToken;
       if (token !== req.session.csrfToken) {
@@ -215,8 +214,8 @@ app.use('/admin', isAuthenticated, express.static(path.join(__dirname, 'public',
 // ========== АДМИН-API ==========
 app.use('/admin', isAuthenticated, adminRouter(upload));
 
-// ========== ПУБЛИЧНЫЕ API ==========
-app.get('/api/news', async (req, res) => {
+// ========== ПУБЛИЧНЫЕ API (С КЕШИРОВАНИЕМ) ==========
+app.get('/api/news', cacheControl(300), async (req, res) => {
    try {
       const heroResult = await pool.query(
          `SELECT id, title, slug, excerpt, content, image_url, published_at, is_hero
@@ -236,7 +235,7 @@ app.get('/api/news', async (req, res) => {
    }
 });
 
-app.get('/api/news/:slug', async (req, res) => {
+app.get('/api/news/:slug', cacheControl(300), async (req, res) => {
    try {
       const result = await pool.query(
          `SELECT id, title, slug, content, excerpt, image_url, published_at, meta_title, meta_description
@@ -251,13 +250,22 @@ app.get('/api/news/:slug', async (req, res) => {
    }
 });
 
-app.get('/api/categories', async (req, res) => {
+app.get('/api/categories', cacheControl(600), async (req, res) => {
    try {
       const { all } = req.query;
+      const cacheKey = `categories_${all || 'active'}`;
+      
+      const cached = cache.get(cacheKey);
+      if (cached) {
+         return res.json(cached);
+      }
+      
       const query = all
          ? 'SELECT id, name, slug, parent_id, sort_order, is_active, icon_svg FROM categories ORDER BY sort_order, id'
          : 'SELECT id, name, slug, parent_id, sort_order, icon_svg FROM categories WHERE is_active = true ORDER BY sort_order, id';
       const result = await pool.query(query);
+      
+      cache.set(cacheKey, result.rows, 600);
       res.json(result.rows);
    } catch (err) {
       console.error(err);
@@ -265,7 +273,23 @@ app.get('/api/categories', async (req, res) => {
    }
 });
 
-app.get('/api/products', async (req, res) => {
+app.get('/api/categories/:id/children', cacheControl(600), async (req, res) => {
+   try {
+      const result = await pool.query(
+         `SELECT id, name, slug, sort_order, icon_svg 
+          FROM categories 
+          WHERE parent_id = $1 AND is_active = true 
+          ORDER BY sort_order, id`,
+         [req.params.id]
+      );
+      res.json(result.rows);
+   } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Database error' });
+   }
+});
+
+app.get('/api/products', cacheControl(300), async (req, res) => {
    const { category_id, all, search } = req.query;
    try {
       let query, params = [];
@@ -273,7 +297,6 @@ app.get('/api/products', async (req, res) => {
          query = `SELECT p.* FROM products p WHERE p.is_active = true AND p.name ILIKE $1 ORDER BY p.sort_order, p.id`;
          params = [`%${search.trim()}%`];
       } else if (category_id) {
-         // Рекурсивно получаем все дочерние категории, а также товары, привязанные через product_categories
          query = `
             WITH RECURSIVE cat_tree AS (
                 SELECT id FROM categories WHERE id = $1
@@ -299,7 +322,7 @@ app.get('/api/products', async (req, res) => {
    }
 });
 
-app.get('/api/random-products', async (req, res) => {
+app.get('/api/random-products', cacheControl(60), async (req, res) => {
    const limit = parseInt(req.query.limit) || 4;
    try {
       const result = await pool.query(
@@ -313,7 +336,7 @@ app.get('/api/random-products', async (req, res) => {
    }
 });
 
-app.get('/api/products/:id', async (req, res) => {
+app.get('/api/products/:id', cacheControl(300), async (req, res) => {
    try {
       const result = await pool.query('SELECT * FROM products WHERE id = $1', [req.params.id]);
       if (result.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
@@ -324,7 +347,22 @@ app.get('/api/products/:id', async (req, res) => {
    }
 });
 
-app.get('/api/products-by-slug/:slug', async (req, res) => {
+app.get('/api/package-types', cacheControl(600), async (req, res) => {
+   try {
+      const cacheKey = 'package_types';
+      const cached = cache.get(cacheKey);
+      if (cached) return res.json(cached);
+      
+      const result = await pool.query('SELECT id, name, icon_url FROM package_types ORDER BY name');
+      cache.set(cacheKey, result.rows, 600);
+      res.json(result.rows);
+   } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Database error' });
+   }
+});
+
+app.get('/api/products-by-slug/:slug', cacheControl(300), async (req, res) => {
    try {
       const productResult = await pool.query(
          `SELECT id, name, slug, excerpt, description, image_url, category_id, is_active
@@ -334,7 +372,6 @@ app.get('/api/products-by-slug/:slug', async (req, res) => {
       if (productResult.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
       const product = productResult.rows[0];
 
-      // Получаем все категории товара (прямые связи)
       const categoriesResult = await pool.query(`
          SELECT c.id, c.name, c.slug, c.icon_svg, c.parent_id
          FROM product_categories pc
@@ -342,7 +379,6 @@ app.get('/api/products-by-slug/:slug', async (req, res) => {
          WHERE pc.product_id = $1
       `, [product.id]);
 
-      // Если есть основная категория, добавляем и её
       if (product.category_id) {
          const mainCat = await pool.query('SELECT id, name, slug, icon_svg, parent_id FROM categories WHERE id = $1', [product.category_id]);
          if (mainCat.rows.length > 0) {
@@ -353,37 +389,34 @@ app.get('/api/products-by-slug/:slug', async (req, res) => {
          }
       }
 
-      // Оставляем только корневые категории (parent_id IS NULL)
       const rootCategories = categoriesResult.rows.filter(cat => cat.parent_id === null);
 
-      // Для каждой корневой категории находим конечную подкатегорию, к которой привязан товар
       const categoriesWithChildren = await Promise.all(
          rootCategories.map(async (cat) => {
             const childRes = await pool.query(`
-         WITH RECURSIVE sub AS (
-            SELECT c.id, c.name, c.slug, c.icon_svg, c.parent_id
-            FROM categories c
-            JOIN product_categories pc ON c.id = pc.category_id
-            WHERE pc.product_id = $1 AND c.parent_id = $2
-            UNION ALL
-            SELECT c.id, c.name, c.slug, c.icon_svg, c.parent_id
-            FROM categories c
-            INNER JOIN sub ON c.parent_id = sub.id
-            JOIN product_categories pc ON c.id = pc.category_id
-            WHERE pc.product_id = $1
-         )
-         SELECT * FROM sub
-         WHERE id NOT IN (SELECT DISTINCT parent_id FROM categories WHERE parent_id IS NOT NULL)
-         LIMIT 1
-      `, [product.id, cat.id]);
+               WITH RECURSIVE sub AS (
+                  SELECT c.id, c.name, c.slug, c.icon_svg, c.parent_id
+                  FROM categories c
+                  JOIN product_categories pc ON c.id = pc.category_id
+                  WHERE pc.product_id = $1 AND c.parent_id = $2
+                  UNION ALL
+                  SELECT c.id, c.name, c.slug, c.icon_svg, c.parent_id
+                  FROM categories c
+                  INNER JOIN sub ON c.parent_id = sub.id
+                  JOIN product_categories pc ON c.id = pc.category_id
+                  WHERE pc.product_id = $1
+               )
+               SELECT * FROM sub
+               WHERE id NOT IN (SELECT DISTINCT parent_id FROM categories WHERE parent_id IS NOT NULL)
+            `, [product.id, cat.id]);
 
             if (childRes.rows.length > 0) {
                return {
                   ...cat,
-                  childCategory: childRes.rows[0]  // конечная подкатегория, привязанная к товару
+                  childCategories: childRes.rows
                };
             }
-            return cat; // если не нашли дочерних — оставляем корневую
+            return { ...cat, childCategories: [] };
          })
       );
 
@@ -420,6 +453,36 @@ app.get('/news/:slug', (req, res) => {
 app.get('/product/:slug', (req, res) => {
    res.sendFile(path.join(__dirname, 'public', 'product.html'));
 });
+
+// Автоматическое создание таблиц при первом запуске
+async function initDatabase() {
+   const client = await pool.connect();
+   try {
+      await client.query(`
+         CREATE TABLE IF NOT EXISTS categories (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            slug VARCHAR(255) UNIQUE NOT NULL,
+            parent_id INTEGER REFERENCES categories(id),
+            sort_order INTEGER DEFAULT 0,
+            is_active BOOLEAN DEFAULT true,
+            description TEXT,
+            icon_svg TEXT
+         );
+         -- Добавьте остальные таблицы по аналогии
+      `);
+   } finally {
+      client.release();
+   }
+}
+
+if (require.main === module) {
+   initDatabase().then(() => {
+      app.listen(port, () => {
+         console.log(`Server running at http://localhost:${port}`);
+      });
+   });
+}
 
 // ========== ЕДИНЫЙ ОБРАБОТЧИК ОШИБОК ==========
 app.use((err, req, res, next) => {

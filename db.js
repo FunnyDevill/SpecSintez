@@ -7,7 +7,6 @@ const pool = new Pool(
   isTest
     ? {
         connectionString: process.env.TEST_DATABASE_URL,
-        // или по частям, если используете отдельные переменные
       }
     : {
         user: process.env.DB_USER || 'postgres',

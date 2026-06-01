@@ -1,9 +1,7 @@
-   var allCategories = [];
-
 document.addEventListener('DOMContentLoaded', async () => {
+   let allCategories = [];
    let currentCategoryId = null;
    let allProducts = [];
-   allCategories = [];
    let currentPage = 1;
    const ITEMS_PER_PAGE = 12;
 
@@ -12,8 +10,10 @@ document.addEventListener('DOMContentLoaded', async () => {
    const searchInput = document.getElementById('catalogSearchInput');
    const searchBtn = document.getElementById('catalogSearchBtn');
    const searchClear = document.getElementById('catalogSearchClear');
+   const filtersContainer = document.getElementById('catalog-filters');
 
    try {
+      // Загружаем только корневые категории для сайдбара
       const res = await fetch('/api/categories');
       if (!res.ok) throw new Error('Ошибка загрузки категорий');
       allCategories = await res.json();
@@ -23,9 +23,9 @@ document.addEventListener('DOMContentLoaded', async () => {
          return;
       }
 
-      const tree = renderCategoryTree(allCategories);
-      treeContainer.innerHTML = '';
-      treeContainer.appendChild(tree);
+      // Показываем только корневые категории
+      const rootCategories = allCategories.filter(c => c.parent_id === null);
+      renderRootCategories(rootCategories);
 
       const urlParams = new URLSearchParams(window.location.search);
       const categorySlug = urlParams.get('category');
@@ -36,29 +36,23 @@ document.addEventListener('DOMContentLoaded', async () => {
          if (found) targetId = found.id;
       }
 
-      if (!targetId) {
-         const roots = allCategories.filter(c => c.parent_id === null);
-         if (roots.length) {
-            roots.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
-            targetId = roots[0].id;
-            const newUrl = new URL(window.location);
-            newUrl.searchParams.set('category', roots[0].slug);
-            window.history.replaceState({}, '', newUrl);
-         }
+      if (!targetId && rootCategories.length > 0) {
+         rootCategories.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+         targetId = rootCategories[0].id;
+         const newUrl = new URL(window.location);
+         newUrl.searchParams.set('category', rootCategories[0].slug);
+         window.history.replaceState({}, '', newUrl);
       }
 
       if (targetId) {
-         const targetItem = document.querySelector(`.tree-item[data-id="${targetId}"]`);
-         if (targetItem) targetItem.click();
-         else loadProducts(targetId);
+         loadProducts(targetId);
+         // Проверяем, нужно ли раскрыть дерево
+         const expandId = urlParams.get('expand');
+         if (expandId) {
+            expandTreeToCategory(parseInt(expandId, 10));
+         }
       } else {
          productsContainer.innerHTML = '<p class="no-products">Выберите категорию</p>';
-      }
-
-      // Проверяем, нужно ли раскрыть дерево до определённой категории
-      const expandId = urlParams.get('expand');
-      if (expandId && targetId) {
-         expandTreeToCategory(parseInt(expandId, 10));
       }
 
    } catch (err) {
@@ -66,7 +60,110 @@ document.addEventListener('DOMContentLoaded', async () => {
       treeContainer.innerHTML = '<p class="error-message">Не удалось загрузить категории</p>';
    }
 
-   // ========== Поиск по названию ==========
+   // ========== Рендер корневых категорий (только отрасли) ==========
+   function renderRootCategories(categories) {
+      treeContainer.innerHTML = '';
+      const ul = document.createElement('ul');
+      ul.className = 'tree-root';
+
+      categories.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+
+      for (const cat of categories) {
+         const li = document.createElement('li');
+         li.className = 'root-category';
+
+         const itemDiv = document.createElement('div');
+         itemDiv.className = 'tree-item';
+         itemDiv.dataset.id = cat.id;
+         itemDiv.dataset.slug = cat.slug;
+         itemDiv.innerHTML = `
+            <span class="toggle-icon">▶</span>
+            ${window.escapeHtml(cat.name)}
+         `;
+
+         // Загружаем дочерние категории при клике
+         itemDiv.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            
+            // Убираем активный класс у всех
+            document.querySelectorAll('#category-tree-container .tree-item').forEach(el => el.classList.remove('active'));
+            itemDiv.classList.add('active');
+            currentCategoryId = cat.id;
+
+            // Загружаем товары для этой категории
+            loadProducts(cat.id);
+
+            // Показываем дочерние категории (ленивая загрузка)
+            const childrenContainer = li.querySelector('.children-container');
+            if (childrenContainer) {
+               childrenContainer.classList.toggle('hidden');
+               const toggle = itemDiv.querySelector('.toggle-icon');
+               toggle.textContent = childrenContainer.classList.contains('hidden') ? '▶' : '▼';
+            } else {
+               await loadChildren(cat.id, li);
+               const toggle = itemDiv.querySelector('.toggle-icon');
+               toggle.textContent = '▼';
+            }
+
+            const url = new URL(window.location);
+            url.searchParams.set('category', cat.slug);
+            window.history.pushState({}, '', url);
+         });
+
+         li.appendChild(itemDiv);
+         ul.appendChild(li);
+      }
+
+      treeContainer.appendChild(ul);
+   }
+
+   // ========== Ленивая загрузка дочерних категорий ==========
+   async function loadChildren(parentId, parentLi) {
+      const container = document.createElement('div');
+      container.className = 'children-container';
+
+      try {
+         const res = await fetch(`/api/categories/${parentId}/children`);
+         if (!res.ok) throw new Error('Ошибка загрузки');
+         const children = await res.json();
+
+         if (children.length > 0) {
+            const ul = document.createElement('ul');
+            ul.className = 'children-list';
+
+            children.forEach(child => {
+               const li = document.createElement('li');
+               const item = document.createElement('div');
+               item.className = 'tree-item child-item';
+               item.dataset.id = child.id;
+               item.dataset.slug = child.slug;
+               item.innerHTML = window.escapeHtml(child.name);
+
+               item.addEventListener('click', (e) => {
+                  e.stopPropagation();
+                  document.querySelectorAll('#category-tree-container .tree-item').forEach(el => el.classList.remove('active'));
+                  item.classList.add('active');
+                  currentCategoryId = child.id;
+                  loadProducts(child.id);
+                  const url = new URL(window.location);
+                  url.searchParams.set('category', child.slug);
+                  window.history.pushState({}, '', url);
+               });
+
+               li.appendChild(item);
+               ul.appendChild(li);
+            });
+
+            container.appendChild(ul);
+         }
+      } catch (err) {
+         console.error(err);
+      }
+
+      parentLi.appendChild(container);
+   }
+
+   // ========== Поиск ==========
    function performSearch() {
       const query = searchInput.value.trim();
       if (!query) return;
@@ -98,122 +195,80 @@ document.addEventListener('DOMContentLoaded', async () => {
    }
 
    searchBtn.addEventListener('click', performSearch);
-   searchInput.addEventListener('keypress', function (e) {
-      if (e.key === 'Enter') performSearch();
-   });
-
-   searchClear.addEventListener('click', function () {
+   searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') performSearch(); });
+   searchClear.addEventListener('click', () => {
       searchInput.value = '';
       searchClear.classList.add('hidden');
-      if (allCategories.length > 0) {
-         const roots = allCategories.filter(c => c.parent_id === null);
-         if (roots.length) {
-            roots.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
-            const firstRoot = roots[0];
-            loadProducts(firstRoot.id);
-            const item = document.querySelector(`.tree-item[data-id="${firstRoot.id}"]`);
-            if (item) setActiveCategory(item);
-         }
-      } else {
-         productsContainer.innerHTML = '<p class="no-products">Выберите категорию</p>';
+      // Возвращаемся к первой категории
+      const roots = allCategories.filter(c => c.parent_id === null);
+      if (roots.length > 0) {
+         roots.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+         loadProducts(roots[0].id);
       }
    });
 
-   // ========== Дерево категорий ==========
-   function renderCategoryTree(categories, parentId = null) {
-      const children = categories.filter(c => c.parent_id === parentId);
-      if (!children.length) return null;
-
-      const ul = document.createElement('ul');
-      ul.className = 'tree-node';
-      children.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
-
-      for (const cat of children) {
-         const li = document.createElement('li');
-         li.className = 'tree-item-wrapper';
-
-         const itemDiv = document.createElement('div');
-         itemDiv.className = 'tree-item';
-         itemDiv.dataset.id = cat.id;
-         itemDiv.dataset.slug = cat.slug;
-         itemDiv.textContent = cat.name;
-
-         const hasChildren = categories.some(c => c.parent_id === cat.id);
-         let toggleSpan = null;
-         if (hasChildren) {
-            toggleSpan = document.createElement('span');
-            toggleSpan.className = 'toggle-icon';
-            toggleSpan.textContent = '▶';
-            itemDiv.prepend(toggleSpan);
-
-            toggleSpan.addEventListener('click', (e) => {
-               e.stopPropagation();
-               const childrenUl = li.querySelector(':scope > ul.tree-node');
-               if (!childrenUl) return;
-               if (childrenUl.classList.contains('hidden')) {
-                  const parentUl = li.parentElement;
-                  if (parentUl) {
-                     parentUl.querySelectorAll(':scope > li.tree-item-wrapper > ul.tree-node').forEach(ul => {
-                        if (ul !== childrenUl && !ul.classList.contains('hidden')) {
-                           ul.classList.add('hidden');
-                           const siblingToggle = ul.closest('li')?.querySelector(':scope > .tree-item .toggle-icon');
-                           if (siblingToggle) siblingToggle.textContent = '▶';
-                        }
-                     });
-                  }
-                  childrenUl.classList.remove('hidden');
-                  toggleSpan.textContent = '▼';
-               } else {
-                  childrenUl.classList.add('hidden');
-                  toggleSpan.textContent = '▶';
-               }
-            });
-         }
-
-         itemDiv.addEventListener('click', (e) => {
-            if (toggleSpan && e.target === toggleSpan) return;
-            setActiveCategory(itemDiv);
-            loadProducts(cat.id);
-            const url = new URL(window.location);
-            url.searchParams.set('category', cat.slug);
-            window.history.pushState({}, '', url);
-            searchInput.value = '';
-            searchClear.classList.add('hidden');
-         });
-
-         li.appendChild(itemDiv);
-         const childUl = renderCategoryTree(categories, cat.id);
-         if (childUl) {
-            childUl.classList.add('hidden');
-            li.appendChild(childUl);
-            if (toggleSpan) toggleSpan.textContent = '▶';
-         }
-         ul.appendChild(li);
-      }
-      return ul;
-   }
-
-   function setActiveCategory(el) {
-      document.querySelectorAll('#category-tree-container .tree-item').forEach(e => e.classList.remove('active'));
-      el.classList.add('active');
-      currentCategoryId = el.dataset.id;
-   }
-
+   // ========== Загрузка товаров с фильтрами ==========
    async function loadProducts(categoryId) {
       if (!categoryId) return;
       productsContainer.innerHTML = '<div class="loading">Загрузка товаров...</div>';
+
+      // Получаем значения фильтров
+      const packageTypeFilter = document.getElementById('filter-package-type')?.value || '';
+      const volumeFilter = document.getElementById('filter-volume')?.value || '';
+
+      let url = `/api/products?category_id=${categoryId}`;
+      if (packageTypeFilter) url += `&package_type=${packageTypeFilter}`;
+      if (volumeFilter) url += `&volume=${volumeFilter}`;
+
       try {
-         const res = await fetch(`/api/products?category_id=${categoryId}`);
+         const res = await fetch(url);
          if (!res.ok) throw new Error('Ошибка загрузки товаров');
          allProducts = await res.json();
          currentPage = 1;
          renderPage();
+         renderFilters();
       } catch (err) {
          console.error(err);
          productsContainer.innerHTML = '<div class="error-message">Не удалось загрузить товары</div>';
       }
    }
 
+   // ========== Рендер фильтров ==========
+   async function renderFilters() {
+      if (!filtersContainer) return;
+
+      try {
+         const [packageTypesRes] = await Promise.all([
+            fetch('/api/package-types')
+         ]);
+
+         const packageTypes = await packageTypesRes.json();
+
+         filtersContainer.innerHTML = `
+            <div class="catalog-filters__inner">
+               <select id="filter-package-type" class="filter-select">
+                  <option value="">Все типы упаковок</option>
+                  ${packageTypes.map(pt => `<option value="${pt.id}">${window.escapeHtml(pt.name)}</option>`).join('')}
+               </select>
+               <button id="apply-filters" class="btn btn-primary">Применить</button>
+               <button id="reset-filters" class="btn btn-outline">Сбросить</button>
+            </div>
+         `;
+
+         document.getElementById('apply-filters').addEventListener('click', () => {
+            if (currentCategoryId) loadProducts(currentCategoryId);
+         });
+
+         document.getElementById('reset-filters').addEventListener('click', () => {
+            document.getElementById('filter-package-type').value = '';
+            if (currentCategoryId) loadProducts(currentCategoryId);
+         });
+      } catch (err) {
+         console.error(err);
+      }
+   }
+
+   // ========== Рендер товаров ==========
    function renderPage() {
       if (!allProducts.length) {
          productsContainer.innerHTML = '<div class="no-products">В этой категории пока нет товаров</div>';
@@ -260,23 +315,23 @@ document.addEventListener('DOMContentLoaded', async () => {
       for (const prod of products) {
          const card = document.createElement('article');
          card.className = 'product-card';
-         const categorySlug = prod.categories && prod.categories.length ? prod.categories[0].slug : '';
          card.innerHTML = `
-                <div class="product-card__image-placeholder">
-                    <img src="${escapeHtml(prod.image_url || '')}" 
-                         alt="${escapeHtml(prod.name)}"
-                         class="product-card__image">
-                </div>
-                <div class="product-card__body">
-                    <h3>${escapeHtml(prod.name)}</h3>
-                    <p class="excerpt">${escapeHtml(prod.excerpt || '')}</p>
-                    <a href="/product/${prod.slug}?category=${categorySlug}" class="product-card__link">Подробнее ›</a>
-                </div>
-            `;
+            <div class="product-card__image-placeholder">
+               <img src="${escapeHtml(prod.image_url || '')}"
+               alt="${escapeHtml(prod.name)}"
+               class="product-card__image" 
+               loading="lazy">
+            </div>
+            <div class="product-card__body">
+               <h3>${escapeHtml(prod.name)}</h3>
+               <p class="excerpt">${escapeHtml(prod.excerpt || '')}</p>
+               <a href="/product/${prod.slug}" class="product-card__link">Подробнее ›</a>
+            </div>
+         `;
          productsContainer.appendChild(card);
          const img = card.querySelector('.product-card__image');
          if (img) {
-            img.addEventListener('error', function () {
+            img.addEventListener('error', function() {
                this.classList.add('image-hidden');
                this.parentElement.classList.add('fallback');
             });
@@ -293,60 +348,27 @@ document.addEventListener('DOMContentLoaded', async () => {
       return html;
    }
 
-function expandTreeToCategory(catId) {
-    var chain = [catId];
-    var currentCat = allCategories.find(c => c.id === catId);
+   // ========== Раскрытие дерева до указанной категории ==========
+   function expandTreeToCategory(catId) {
+      const targetItem = document.querySelector(`.tree-item[data-id="${catId}"]`);
+      if (!targetItem) return;
 
-    while (currentCat && currentCat.parent_id) {
-        chain.push(currentCat.parent_id);
-        currentCat = allCategories.find(c => c.id === currentCat.parent_id);
-    }
+      // Активируем целевую категорию
+      document.querySelectorAll('#category-tree-container .tree-item').forEach(el => el.classList.remove('active'));
+      targetItem.classList.add('active');
 
-    console.log('Цепочка ID:', chain);
+      // Раскрываем родительские категории
+      let parentLi = targetItem.closest('li');
+      while (parentLi) {
+         const childrenContainer = parentLi.querySelector(':scope > .children-container');
+         if (childrenContainer && childrenContainer.classList.contains('hidden')) {
+            childrenContainer.classList.remove('hidden');
+            const toggle = parentLi.querySelector(':scope > .tree-item .toggle-icon');
+            if (toggle) toggle.textContent = '▼';
+         }
+         parentLi = parentLi.parentElement?.closest('li');
+      }
 
-    for (var i = chain.length - 1; i >= 0; i--) {
-        var id = chain[i];
-        console.log('Обрабатываем ID:', id);
-        
-        var el = document.querySelector('.tree-item[data-id="' + id + '"]');
-        if (!el) {
-            console.log('Элемент не найден для ID:', id);
-            continue;
-        }
-        
-        var li = el.closest('li');
-        if (!li) {
-            console.log('li не найден для ID:', id);
-            continue;
-        }
-        
-        var childUl = null;
-        for (var j = 0; j < li.children.length; j++) {
-            if (li.children[j].tagName === 'UL' && li.children[j].classList.contains('tree-node')) {
-                childUl = li.children[j];
-                break;
-            }
-        }
-        
-        if (childUl) {
-            console.log('Для ID', id, 'childUl найден, hidden:', childUl.classList.contains('hidden'));
-            if (childUl.classList.contains('hidden')) {
-                childUl.classList.remove('hidden');
-                var toggle = el.querySelector('.toggle-icon');
-                if (toggle) toggle.textContent = '▼';
-                console.log('Раскрыт ID:', id);
-            }
-        } else {
-            console.log('Для ID', id, 'childUl не найден');
-        }
-    }
-
-    var targetEl = document.querySelector('.tree-item[data-id="' + catId + '"]');
-    if (targetEl) {
-        setActiveCategory(targetEl);
-    }
-
-    loadProducts(catId);
-}
-
+      loadProducts(catId);
+   }
 });

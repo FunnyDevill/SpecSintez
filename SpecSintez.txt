@@ -1,11 +1,23 @@
 pm2 start server.js --name specsintez
 pm2 stop specsintez
 
-server.js - заменить:
-app.use(cors({
-  origin: [
-    'https://specsintez.com',
-    'https://www.specsintez.com',
-    'https://admin.specsintez.com'
-  ]
-}));
+в продакшен версии заменить css и script в HTML на
+<link rel="stylesheet" href="/css/dist/bundle.css">
+<script src="/js/dist/bundle.js"></script>
+
+Docker:
+Запуск:
+# Собрать и запустить
+docker-compose up -d
+
+# Посмотреть логи
+docker-compose logs -f
+
+# Остановить
+docker-compose down
+
+Обновить приложение:
+# Пересобрать образ и перезапустить
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d

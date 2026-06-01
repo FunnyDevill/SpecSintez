@@ -81,7 +81,10 @@ function renderNews(newsList, container) {
       const formattedDate = window.formatDate(item.published_at);
       card.innerHTML = `
             <div class="news-card__image-placeholder">
-                ${item.image_url ? `<img src="${item.image_url}" alt="${window.escapeHtml(item.title)}" class="cover-image">` : `
+                ${item.image_url ? `<img src="${item.image_url}"
+                 alt="${window.escapeHtml(item.title)}"
+                  class="cover-image"
+                  loading="lazy">` : `
                     <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                         <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
                         <circle cx="8.5" cy="8.5" r="1.5"/>
