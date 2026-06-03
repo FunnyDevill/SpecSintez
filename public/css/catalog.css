@@ -504,6 +504,7 @@
 
 .product-industry-item:hover {
   transform: translateY(-3px);
+  color: var(--white);
 }
 
 .product-industry-item .industry-card__icon img {

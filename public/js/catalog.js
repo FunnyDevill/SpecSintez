@@ -403,12 +403,12 @@ document.addEventListener("DOMContentLoaded", async () => {
                   ${product.directions
                     .map(
                       (dir) => `
-                     <div class="product-industry-item">
-                        <div class="industry-card__icon">
-                           ${dir.image_url ? `<img src="${dir.image_url}" alt="${window.App.escapeHtml(dir.name)}" style="width:36px;height:36px;object-fit:contain;">` : ""}
-                        </div>
-                        <span>${window.App.escapeHtml(dir.name)}</span>
-                     </div>
+<a href="/catalog.html?direction=${dir.id}" class="product-industry-item" onclick="event.stopPropagation()">
+   <div class="industry-card__icon">
+      ${dir.image_url ? `<img src="${dir.image_url}" alt="${window.App.escapeHtml(dir.name)}" style="width:36px;height:36px;object-fit:contain;">` : ""}
+   </div>
+   <span>${window.App.escapeHtml(dir.name)}</span>
+</a>
                   `,
                     )
                     .join("")}
