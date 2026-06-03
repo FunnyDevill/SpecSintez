@@ -4,6 +4,7 @@
    font-weight: 700;
    margin-bottom: 1rem;
    color: var(--white);
+   text-shadow: 0 0 20px rgba(20, 184, 166, 0.3);
 }
 
 .page-content .intro {
@@ -18,35 +19,38 @@
    gap: 1.5rem;
 }
 
-.product-card {
+.product-list .product-card {
    display: flex;
    flex-direction: column;
    height: 100%;
-   background: var(--dark-bg-alt);
+   background: rgba(26, 58, 79, 0.7);
+   backdrop-filter: blur(10px);
+   -webkit-backdrop-filter: blur(10px);
    border-radius: var(--radius-lg);
    padding: 1.5rem;
-   border: 1px solid var(--border-color);
-   transition: all 0.2s;
+   border: 1px solid rgba(20, 184, 166, 0.15);
+   transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
-.product-card:hover {
-   transform: translateY(-4px);
+.product-list .product-card:hover {
+   transform: translateY(-6px);
    border-color: var(--teal);
+   box-shadow: 0 20px 40px rgba(20, 184, 166, 0.15);
 }
 
-.product-card h2 {
+.product-list .product-card h2 {
    font-size: 1.4rem;
    margin-bottom: 0.5rem;
    color: var(--white);
 }
 
-.product-card .cas {
+.product-list .product-card .cas {
    font-size: 0.8rem;
    color: var(--teal);
    margin-bottom: 1rem;
 }
 
-.product-card .description {
+.product-list .product-card .description {
    font-size: 0.9rem;
    color: var(--white-dim);
    margin-bottom: 1.25rem;
@@ -61,6 +65,7 @@
    font-weight: 500;
    font-size: 0.9rem;
    margin-top: auto;
+   transition: gap 0.3s ease, color 0.3s ease;
 }
 
 .pdf-link img,
@@ -76,32 +81,28 @@
 }
 
 @media (max-width: 768px) {
-  .product-list {
-    grid-template-columns: 1fr;
-  }
-  
-  /* Повышаем специфичность, чтобы переопределить adaptive.css */
-  .product-list .product-card {
-    padding: 1rem;
-    flex-direction: column;
-    text-align: center;
-    align-items: center;
-  }
-  
-  .product-list .product-card h2 {
-    font-size: 1.2rem;
-  }
-  
-  .product-list .product-card .description {
-    font-size: 0.85rem;
-  }
-  
-  .product-list .pdf-link {
-    font-size: 0.8rem;
-  }
-  
-  .product-list .pdf-link img,
-  .product-list .pdf-link svg {
-    width: 20px;
-  }
+   .product-list {
+      grid-template-columns: 1fr;
+   }
+
+   .product-list .product-card {
+      padding: 1rem;
+   }
+
+   .product-list .product-card h2 {
+      font-size: 1.2rem;
+   }
+
+   .product-list .product-card .description {
+      font-size: 0.85rem;
+   }
+
+   .product-list .pdf-link {
+      font-size: 0.8rem;
+   }
+
+   .product-list .pdf-link img,
+   .product-list .pdf-link svg {
+      width: 20px;
+   }
 }

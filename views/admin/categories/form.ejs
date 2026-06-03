@@ -3,154 +3,159 @@
       <strong>Ошибки:</strong>
       <ul>
          <% errors.forEach(err=> { %>
-            <li>
-               <%= err %>
-            </li>
-            <% }); %>
+            <li><%= err %></li>
+         <% }); %>
       </ul>
    </div>
-   <% } %>
+<% } %>
 
-      <h1>
-         <%= category ? 'Редактирование категории' : 'Создание категории' %>
-      </h1>
+<h1><%= category ? 'Редактирование категории' : 'Создание категории' %></h1>
 
-      <form method="POST" action="<%= action %>" enctype="multipart/form-data" id="category-form">
-         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+<form method="POST" action="<%= action %>" enctype="multipart/form-data" id="category-form">
+   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
-         <div class="form-group">
-            <label for="name">Название *</label>
-            <input type="text" id="name" name="name" value="<%= category ? category.name : '' %>" required>
+   <div class="form-group">
+      <label for="name">Название *</label>
+      <input type="text" id="name" name="name" value="<%= category ? category.name : '' %>" required>
+   </div>
+
+   <div class="form-group">
+      <label for="slug">Код для ссылки (slug) *</label>
+      <input type="text" id="slug" name="slug" value="<%= category ? category.slug : '' %>">
+      <small>Оставьте пустым для автоматической генерации из названия</small>
+   </div>
+
+   <div class="form-group">
+      <label for="parent_id">Родительская категория</label>
+      <select name="parent_id" id="parent_id">
+         <option value="">— Нет (корневая) —</option>
+         <% parents.forEach(p=> { %>
+            <option value="<%= p.id %>" <%=category && category.parent_id==p.id ? 'selected' : '' %>><%= p.name %></option>
+         <% }); %>
+      </select>
+   </div>
+
+   <div class="form-group">
+      <label for="sort_order">Порядок сортировки</label>
+      <input type="number" id="sort_order" name="sort_order" value="<%= category ? category.sort_order : 0 %>">
+   </div>
+
+   <div class="form-group">
+      <label for="description">Описание</label>
+      <textarea id="description" name="description" rows="4"><%= category ? category.description : '' %></textarea>
+   </div>
+
+   <div class="form-group" id="icon-section">
+      <label>Иконка (SVG)</label>
+      <% if (category && category.icon_svg) { %>
+         <div class="current-icon-block">
+            <img src="<%= category.icon_svg %>" alt="Текущая иконка" class="current-icon-preview">
+            <button type="button" id="remove-icon-btn" class="btn-small btn-danger ml-10">✖ Удалить иконку</button>
+            <input type="hidden" name="remove_icon" id="remove-icon-flag" value="false">
          </div>
+         <small>Вы можете удалить текущую иконку или загрузить новую (только SVG).</small>
+      <% } %>
 
-         <div class="form-group">
-            <label for="slug">Код для ссылки (slug) *</label>
-            <input type="text" id="slug" name="slug" value="<%= category ? category.slug : '' %>" required>
-            <small>Только латинские буквы, цифры и дефисы</small>
+      <div class="image-upload-area" id="icon-upload-area">
+         <input type="file" name="icon" id="icon-file-input" accept=".svg,image/svg+xml" class="hidden">
+         <div class="upload-placeholder" id="icon-placeholder">
+            <span>📁</span>
+            <p>Перетащите SVG-иконку сюда или нажмите для выбора</p>
+            <small>Только формат SVG</small>
          </div>
+         <img id="icon-preview" class="image-preview hidden" src="" alt="Предпросмотр иконки">
+      </div>
+   </div>
 
-         <div class="form-group">
-            <label for="parent_id">Родительская категория</label>
-            <select name="parent_id" id="parent_id">
-               <option value="">— Нет (корневая) —</option>
-               <% parents.forEach(p=> { %>
-                  <option value="<%= p.id %>" <%=category && category.parent_id==p.id ? 'selected' : '' %>><%= p.name %>
-                  </option>
-                  <% }); %>
-            </select>
-         </div>
+   <div class="form-group">
+      <label>
+         <input type="checkbox" name="is_active" <%=category && category.is_active ? 'checked' : '' %>> Активна
+      </label>
+   </div>
 
-         <div class="form-group">
-            <label for="sort_order">Порядок сортировки</label>
-            <input type="number" id="sort_order" name="sort_order" value="<%= category ? category.sort_order : 0 %>">
-         </div>
+   <div class="form-actions">
+      <button type="submit" class="btn">Сохранить</button>
+      <a href="/admin/categories" class="btn-cancel">Отмена</a>
+   </div>
+</form>
 
-         <div class="form-group">
-            <label for="description">Описание</label>
-            <textarea id="description" name="description"
-               rows="4"><%= category ? category.description : '' %></textarea>
-         </div>
+<script src="/js/admin-slugify.js" nonce="<%= nonce %>"></script>
 
-         <div class="form-group" id="icon-section">
-            <label>Иконка (SVG)</label>
-            <% if (category && category.icon_svg) { %>
-               <div class="current-icon-block">
-                  <img src="<%= category.icon_svg %>" alt="Текущая иконка" class="current-icon-preview">
-                  <button type="button" id="remove-icon-btn" class="btn-small btn-danger ml-10">✖ Удалить
-                     иконку</button>
-                  <input type="hidden" name="remove_icon" id="remove-icon-flag" value="false">
-               </div>
-               <small>Вы можете удалить текущую иконку или загрузить новую (только SVG).</small>
-               <% } %>
+<script nonce="<%= nonce %>">
+   document.addEventListener('DOMContentLoaded', function () {
+      var parentSelect = document.getElementById('parent_id');
+      var iconSection = document.getElementById('icon-section');
 
-                  <div class="image-upload-area" id="icon-upload-area">
-                     <input type="file" name="icon" id="icon-file-input" accept=".svg,image/svg+xml" class="hidden">
-                     <div class="upload-placeholder" id="icon-placeholder">
-                        <span>📁</span>
-                        <p>Перетащите SVG-иконку сюда или нажмите для выбора</p>
-                        <small>Только формат SVG</small>
-                     </div>
-                     <img id="icon-preview" class="image-preview hidden" src="" alt="Предпросмотр иконки">
-                  </div>
-         </div>
+      function toggleIconSection() {
+         if (parentSelect.value === '') {
+            iconSection.style.display = 'block';
+         } else {
+            iconSection.style.display = 'none';
+         }
+      }
+      
+      parentSelect.addEventListener('change', toggleIconSection);
+      toggleIconSection();
 
-         <div class="form-group">
-            <label>
-               <input type="checkbox" name="is_active" <%=category && category.is_active ? 'checked' : '' %>> Активна
-            </label>
-         </div>
+      AppSlugify.bindToFields('name', 'slug');
 
-         <div class="form-actions">
-            <button type="submit" class="btn">Сохранить</button>
-            <a href="/admin/categories" class="btn-cancel">Отмена</a>
-         </div>
-      </form>
+      var uploadArea = document.getElementById('icon-upload-area');
+      var fileInput = document.getElementById('icon-file-input');
+      var placeholder = document.getElementById('icon-placeholder');
+      var newPreview = document.getElementById('icon-preview');
+      var removeBtn = document.getElementById('remove-icon-btn');
+      var removeFlag = document.getElementById('remove-icon-flag');
 
-      <script nonce="<%= nonce %>">
-         document.addEventListener('DOMContentLoaded', function () {
-            const parentSelect = document.getElementById('parent_id');
-            const iconSection = document.getElementById('icon-section');
+      uploadArea.addEventListener('click', function(e) {
+         if (e.target !== removeBtn) fileInput.click();
+      });
 
-            function toggleIconSection() {
-               if (parentSelect.value === '') {
-                  iconSection.style.display = 'block';
-               } else {
-                  iconSection.style.display = 'none';
-               }
-            }
-            parentSelect.addEventListener('change', toggleIconSection);
-            toggleIconSection();
+      fileInput.addEventListener('change', function() {
+         if (fileInput.files.length > 0) handleFile(fileInput.files[0]);
+      });
 
-            const uploadArea = document.getElementById('icon-upload-area');
-            const fileInput = document.getElementById('icon-file-input');
-            const placeholder = document.getElementById('icon-placeholder');
-            const newPreview = document.getElementById('icon-preview');
-            const removeBtn = document.getElementById('remove-icon-btn');
-            const removeFlag = document.getElementById('remove-icon-flag');
+      uploadArea.addEventListener('dragover', function(e) { 
+         e.preventDefault(); 
+         uploadArea.classList.add('dragover'); 
+      });
+      
+      uploadArea.addEventListener('dragleave', function() { 
+         uploadArea.classList.remove('dragover'); 
+      });
+      
+      uploadArea.addEventListener('drop', function(e) {
+         e.preventDefault();
+         uploadArea.classList.remove('dragover');
+         if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+      });
 
-            uploadArea.addEventListener('click', (e) => {
-               if (e.target !== removeBtn) fileInput.click();
-            });
-
-            fileInput.addEventListener('change', () => {
-               if (fileInput.files.length > 0) handleFile(fileInput.files[0]);
-            });
-
-            uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('dragover'); });
-            uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
-            uploadArea.addEventListener('drop', (e) => {
-               e.preventDefault();
-               uploadArea.classList.remove('dragover');
-               if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
-            });
-
-            function handleFile(file) {
-               if (!file || !file.type.includes('svg')) {
-                  alert('Пожалуйста, выберите файл SVG');
-                  return;
-               }
-               const reader = new FileReader();
-               reader.onload = function (e) {
-                  newPreview.src = e.target.result;
-                  newPreview.classList.remove('hidden');
-                  placeholder.classList.add('hidden');
-                  if (removeBtn) {
-                     removeBtn.classList.add('hidden');
-                     removeFlag.value = 'false';
-                  }
-               };
-               reader.readAsDataURL(file);
-            }
-
+      function handleFile(file) {
+         if (!file || !file.type.includes('svg')) {
+            alert('Пожалуйста, выберите файл SVG');
+            return;
+         }
+         var reader = new FileReader();
+         reader.onload = function(e) {
+            newPreview.src = e.target.result;
+            newPreview.classList.remove('hidden');
+            placeholder.classList.add('hidden');
             if (removeBtn) {
-               removeBtn.addEventListener('click', () => {
-                  newPreview.src = '';
-                  newPreview.classList.add('hidden');
-                  placeholder.classList.remove('hidden');
-                  fileInput.value = '';
-                  removeBtn.classList.add('hidden');
-                  removeFlag.value = 'true';
-               });
+               removeBtn.classList.add('hidden');
+               removeFlag.value = 'false';
             }
+         };
+         reader.readAsDataURL(file);
+      }
+
+      if (removeBtn) {
+         removeBtn.addEventListener('click', function() {
+            newPreview.src = '';
+            newPreview.classList.add('hidden');
+            placeholder.classList.remove('hidden');
+            fileInput.value = '';
+            removeBtn.classList.add('hidden');
+            removeFlag.value = 'true';
          });
-      </script>
+      }
+   });
+</script>

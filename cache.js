@@ -5,7 +5,6 @@ module.exports = {
       const item = cache.get(key);
       if (!item) return null;
       
-      // Проверяем время жизни (5 минут по умолчанию)
       if (Date.now() > item.expiry) {
          cache.delete(key);
          return null;
@@ -21,6 +20,21 @@ module.exports = {
       });
    },
    
+   // Удаление конкретного ключа
+   del(key) {
+      cache.delete(key);
+   },
+   
+   // Удаление по паттерну (например, все ключи, начинающиеся с "categories")
+   delByPattern(pattern) {
+      for (const key of cache.keys()) {
+         if (key.startsWith(pattern)) {
+            cache.delete(key);
+         }
+      }
+   },
+   
+   // Полная очистка
    clear() {
       cache.clear();
    }

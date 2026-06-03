@@ -1,374 +1,505 @@
-document.addEventListener('DOMContentLoaded', async () => {
-   let allCategories = [];
-   let currentCategoryId = null;
-   let allProducts = [];
-   let currentPage = 1;
-   const ITEMS_PER_PAGE = 12;
+document.addEventListener("DOMContentLoaded", async () => {
+  let allCategories = [];
+  let allProducts = [];
+  let currentPage = 1;
+  const ITEMS_PER_PAGE = 9;
+  let activeCategory = null;
+  let activeSubcategory = null;
+  let activeDirections = [];
 
-   const treeContainer = document.getElementById('category-tree-container');
-   const productsContainer = document.getElementById('products-grid-container');
-   const searchInput = document.getElementById('catalogSearchInput');
-   const searchBtn = document.getElementById('catalogSearchBtn');
-   const searchClear = document.getElementById('catalogSearchClear');
-   const filtersContainer = document.getElementById('catalog-filters');
+  const categoryAccordion = document.getElementById("category-accordion");
+  const productsGrid = document.getElementById("products-grid");
+  const searchInput = document.getElementById("catalogSearchInput");
+  const directionFilters = document.getElementById("direction-filters");
+  const paginationContainer = document.getElementById("pagination-container");
+  const modal = document.getElementById("product-modal");
+  const modalContent = document.getElementById("product-modal-content");
+  const modalClose = document.getElementById("modal-close");
 
-   try {
-      // Загружаем только корневые категории для сайдбара
-      const res = await fetch('/api/categories');
-      if (!res.ok) throw new Error('Ошибка загрузки категорий');
-      allCategories = await res.json();
+  try {
+    const [catRes, prodRes, dirRes] = await Promise.all([
+      fetch("/api/categories"),
+      fetch("/api/products?all=true"),
+      fetch("/api/directions"),
+    ]);
 
-      if (allCategories.length === 0) {
-         treeContainer.innerHTML = '<p class="error-message">Категории не найдены</p>';
-         return;
+    allCategories = await catRes.json();
+    allProducts = (await prodRes.json()).filter((p) => p.is_active);
+    const directions = await dirRes.json();
+
+    console.log("Загружено товаров:", allProducts.length);
+    console.log("Пример товара:", allProducts[0]);
+
+    renderCategoryAccordion();
+    renderDirections(directions);
+
+    // Обработка URL-параметров при загрузке
+    const urlParams = new URLSearchParams(window.location.search);
+    const directionParam = urlParams.get("direction");
+    const categoryParam = urlParams.get("category");
+    const expandParam = urlParams.get("expand");
+
+    if (directionParam) {
+      const dirId = parseInt(directionParam, 10);
+      if (!isNaN(dirId)) {
+        const chip = document.querySelector(
+          `.direction-chip[data-direction="${dirId}"]`,
+        );
+        if (chip) {
+          chip.classList.add("active");
+          activeDirections.push(dirId);
+        }
       }
+    }
 
-      // Показываем только корневые категории
-      const rootCategories = allCategories.filter(c => c.parent_id === null);
-      renderRootCategories(rootCategories);
+    if (categoryParam) {
+      const cat = allCategories.find((c) => c.slug === categoryParam);
+      if (cat) {
+        activeCategory = cat.id;
 
-      const urlParams = new URLSearchParams(window.location.search);
-      const categorySlug = urlParams.get('category');
-      let targetId = null;
-
-      if (categorySlug) {
-         const found = allCategories.find(c => c.slug === categorySlug);
-         if (found) targetId = found.id;
+        if (expandParam) {
+          const expandId = parseInt(expandParam, 10);
+          if (!isNaN(expandId)) {
+            const expandCat = allCategories.find((c) => c.id === expandId);
+            if (expandCat && expandCat.parent_id) {
+              activeCategory = expandCat.parent_id;
+              activeSubcategory = expandCat.id;
+            }
+          }
+        }
       }
+    }
 
-      if (!targetId && rootCategories.length > 0) {
-         rootCategories.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
-         targetId = rootCategories[0].id;
-         const newUrl = new URL(window.location);
-         newUrl.searchParams.set('category', rootCategories[0].slug);
-         window.history.replaceState({}, '', newUrl);
-      }
+    if (activeDirections.length > 0 || activeCategory) {
+      filterAndRender();
+    } else {
+      renderPage(allProducts);
+    }
+  } catch (err) {
+    console.error(err);
+    productsGrid.innerHTML = '<p class="error-message">Ошибка загрузки</p>';
+  }
 
-      if (targetId) {
-         loadProducts(targetId);
-         // Проверяем, нужно ли раскрыть дерево
-         const expandId = urlParams.get('expand');
-         if (expandId) {
-            expandTreeToCategory(parseInt(expandId, 10));
-         }
-      } else {
-         productsContainer.innerHTML = '<p class="no-products">Выберите категорию</p>';
-      }
+  function renderCategoryAccordion() {
+    const rootCats = allCategories.filter((c) => c.parent_id === null);
 
-   } catch (err) {
-      console.error(err);
-      treeContainer.innerHTML = '<p class="error-message">Не удалось загрузить категории</p>';
-   }
+    categoryAccordion.innerHTML = rootCats
+      .map(
+        (cat) => `
+         <div class="accordion-item">
+            <div class="accordion-header" data-category="${cat.id}">
+               <span>${window.App.escapeHtml(cat.name)}</span>
+               <span class="accordion-arrow">▼</span>
+            </div>
+            <div class="accordion-body" id="body-${cat.id}"></div>
+         </div>
+      `,
+      )
+      .join("");
 
-   // ========== Рендер корневых категорий (только отрасли) ==========
-   function renderRootCategories(categories) {
-      treeContainer.innerHTML = '';
-      const ul = document.createElement('ul');
-      ul.className = 'tree-root';
+    categoryAccordion
+      .querySelectorAll(".accordion-header")
+      .forEach((header) => {
+        header.addEventListener("click", async () => {
+          const catId = parseInt(header.dataset.category);
+          const body = document.getElementById(`body-${catId}`);
+          const isOpen = body.classList.contains("open");
 
-      categories.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+          categoryAccordion
+            .querySelectorAll(".accordion-body")
+            .forEach((b) => b.classList.remove("open"));
+          categoryAccordion
+            .querySelectorAll(".accordion-header")
+            .forEach((h) => {
+              if (h !== header) h.classList.remove("active");
+            });
 
-      for (const cat of categories) {
-         const li = document.createElement('li');
-         li.className = 'root-category';
+          if (!isOpen) {
+            body.classList.add("open");
+            header.classList.add("active");
 
-         const itemDiv = document.createElement('div');
-         itemDiv.className = 'tree-item';
-         itemDiv.dataset.id = cat.id;
-         itemDiv.dataset.slug = cat.slug;
-         itemDiv.innerHTML = `
-            <span class="toggle-icon">▶</span>
-            ${window.escapeHtml(cat.name)}
-         `;
+            if (!body.dataset.loaded) {
+              try {
+                const res = await fetch(`/api/categories/${catId}/children`);
+                const children = await res.json();
 
-         // Загружаем дочерние категории при клике
-         itemDiv.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            
-            // Убираем активный класс у всех
-            document.querySelectorAll('#category-tree-container .tree-item').forEach(el => el.classList.remove('active'));
-            itemDiv.classList.add('active');
-            currentCategoryId = cat.id;
+                body.innerHTML =
+                  children.length > 0
+                    ? children
+                        .map(
+                          (sub) => `
+                        <div class="accordion-subitem" data-category="${catId}" data-subcategory="${sub.id}">
+                           ${window.App.escapeHtml(sub.name)}
+                        </div>
+                     `,
+                        )
+                        .join("")
+                    : '<div class="accordion-subitem" style="color:var(--white-dim);cursor:default;">Нет подкатегорий</div>';
 
-            // Загружаем товары для этой категории
-            loadProducts(cat.id);
+                body.dataset.loaded = "true";
 
-            // Показываем дочерние категории (ленивая загрузка)
-            const childrenContainer = li.querySelector('.children-container');
-            if (childrenContainer) {
-               childrenContainer.classList.toggle('hidden');
-               const toggle = itemDiv.querySelector('.toggle-icon');
-               toggle.textContent = childrenContainer.classList.contains('hidden') ? '▶' : '▼';
-            } else {
-               await loadChildren(cat.id, li);
-               const toggle = itemDiv.querySelector('.toggle-icon');
-               toggle.textContent = '▼';
+                body
+                  .querySelectorAll(".accordion-subitem")
+                  .forEach((subItem) => {
+                    subItem.addEventListener("click", (e) => {
+                      e.stopPropagation();
+                      body
+                        .querySelectorAll(".accordion-subitem")
+                        .forEach((s) => s.classList.remove("active"));
+                      subItem.classList.add("active");
+
+                      activeCategory = parseInt(subItem.dataset.category);
+                      activeSubcategory = parseInt(subItem.dataset.subcategory);
+                      currentPage = 1;
+                      filterAndRender();
+
+                      const subCat = allCategories.find(
+                        (c) => c.id === activeSubcategory,
+                      );
+                      if (subCat) {
+                        const url = new URL(window.location);
+                        url.searchParams.set("category", subCat.slug);
+                        url.searchParams.set("expand", subCat.id);
+                        window.history.pushState({}, "", url);
+                      }
+                    });
+                  });
+              } catch (err) {
+                console.error("Ошибка загрузки подкатегорий:", err);
+              }
             }
 
+            activeCategory = catId;
+            activeSubcategory = null;
+            currentPage = 1;
+            filterAndRender();
+
+            const rootCat = allCategories.find((c) => c.id === catId);
+            if (rootCat) {
+              const url = new URL(window.location);
+              url.searchParams.set("category", rootCat.slug);
+              url.searchParams.delete("expand");
+              window.history.pushState({}, "", url);
+            }
+          } else {
+            activeCategory = null;
+            activeSubcategory = null;
+            currentPage = 1;
+            filterAndRender();
+
             const url = new URL(window.location);
-            url.searchParams.set('category', cat.slug);
-            window.history.pushState({}, '', url);
-         });
+            url.searchParams.delete("category");
+            url.searchParams.delete("expand");
+            window.history.pushState({}, "", url);
+          }
+        });
+      });
+  }
 
-         li.appendChild(itemDiv);
-         ul.appendChild(li);
+  function renderDirections(dirs) {
+    directionFilters.innerHTML = dirs
+      .map(
+        (dir) => `
+         <button class="direction-chip" data-direction="${dir.id}">${dir.name}</button>
+      `,
+      )
+      .join("");
+
+    directionFilters.querySelectorAll(".direction-chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        const dirId = parseInt(chip.dataset.direction);
+
+        if (activeDirections.includes(dirId)) {
+          activeDirections = activeDirections.filter((d) => d !== dirId);
+          chip.classList.remove("active");
+        } else {
+          activeDirections.push(dirId);
+          chip.classList.add("active");
+        }
+
+        console.log("Активные направления:", activeDirections);
+        currentPage = 1;
+        filterAndRender();
+
+        const url = new URL(window.location);
+        url.searchParams.delete("direction");
+        activeDirections.forEach((d) =>
+          url.searchParams.append("direction", d),
+        );
+        window.history.pushState({}, "", url);
+      });
+    });
+  }
+
+  searchInput.addEventListener("input", () => {
+    currentPage = 1;
+    filterAndRender();
+  });
+
+  function filterAndRender() {
+    let filtered = [...allProducts];
+    const query = searchInput.value.trim().toLowerCase();
+
+    if (query) {
+      filtered = filtered.filter((p) => p.name.toLowerCase().includes(query));
+    }
+
+    if (activeCategory) {
+      if (activeSubcategory) {
+        const subId = activeSubcategory;
+        filtered = filtered.filter((p) => {
+          return p.categories && p.categories.some((c) => c.id === subId);
+        });
+      } else {
+        const catId = activeCategory;
+        filtered = filtered.filter((p) => {
+          return (
+            p.categories &&
+            p.categories.some((c) => c.id === catId || c.parent_id === catId)
+          );
+        });
       }
+    }
 
-      treeContainer.appendChild(ul);
-   }
+    if (activeDirections.length > 0) {
+      filtered = filtered.filter((p) => {
+        if (!p.directions || p.directions.length === 0) return false;
+        return activeDirections.every((dirId) =>
+          p.directions.some((d) => d.id === dirId),
+        );
+      });
+    }
 
-   // ========== Ленивая загрузка дочерних категорий ==========
-   async function loadChildren(parentId, parentLi) {
-      const container = document.createElement('div');
-      container.className = 'children-container';
+    renderPage(filtered);
+  }
 
-      try {
-         const res = await fetch(`/api/categories/${parentId}/children`);
-         if (!res.ok) throw new Error('Ошибка загрузки');
-         const children = await res.json();
+  function renderPage(products) {
+    if (products.length === 0) {
+      productsGrid.innerHTML = '<p class="no-products">Товары не найдены</p>';
+      paginationContainer.innerHTML = "";
+      return;
+    }
+    const totalPages = Math.ceil(products.length / ITEMS_PER_PAGE);
+    if (currentPage > totalPages) currentPage = totalPages;
+    if (currentPage < 1) currentPage = 1;
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    const pageProducts = products.slice(start, start + ITEMS_PER_PAGE);
 
-         if (children.length > 0) {
-            const ul = document.createElement('ul');
-            ul.className = 'children-list';
-
-            children.forEach(child => {
-               const li = document.createElement('li');
-               const item = document.createElement('div');
-               item.className = 'tree-item child-item';
-               item.dataset.id = child.id;
-               item.dataset.slug = child.slug;
-               item.innerHTML = window.escapeHtml(child.name);
-
-               item.addEventListener('click', (e) => {
-                  e.stopPropagation();
-                  document.querySelectorAll('#category-tree-container .tree-item').forEach(el => el.classList.remove('active'));
-                  item.classList.add('active');
-                  currentCategoryId = child.id;
-                  loadProducts(child.id);
-                  const url = new URL(window.location);
-                  url.searchParams.set('category', child.slug);
-                  window.history.pushState({}, '', url);
-               });
-
-               li.appendChild(item);
-               ul.appendChild(li);
-            });
-
-            container.appendChild(ul);
-         }
-      } catch (err) {
-         console.error(err);
-      }
-
-      parentLi.appendChild(container);
-   }
-
-   // ========== Поиск ==========
-   function performSearch() {
-      const query = searchInput.value.trim();
-      if (!query) return;
-      currentCategoryId = null;
-      currentPage = 1;
-      loadProductsBySearch(query);
-   }
-
-   async function loadProductsBySearch(query) {
-      productsContainer.innerHTML = '<div class="loading">Поиск товаров...</div>';
-      try {
-         const res = await fetch(`/api/products?search=${encodeURIComponent(query)}`);
-         if (!res.ok) throw new Error('Ошибка поиска');
-         allProducts = await res.json();
-         currentPage = 1;
-         if (allProducts.length === 0) {
-            productsContainer.innerHTML = '<div class="no-products">Ничего не найдено</div>';
-            removePagination();
-         } else {
-            productsContainer.innerHTML = '';
-            renderProductCards(allProducts);
-            removePagination();
-         }
-         searchClear.classList.remove('hidden');
-      } catch (err) {
-         console.error(err);
-         productsContainer.innerHTML = '<div class="error-message">Не удалось выполнить поиск</div>';
-      }
-   }
-
-   searchBtn.addEventListener('click', performSearch);
-   searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') performSearch(); });
-   searchClear.addEventListener('click', () => {
-      searchInput.value = '';
-      searchClear.classList.add('hidden');
-      // Возвращаемся к первой категории
-      const roots = allCategories.filter(c => c.parent_id === null);
-      if (roots.length > 0) {
-         roots.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
-         loadProducts(roots[0].id);
-      }
-   });
-
-   // ========== Загрузка товаров с фильтрами ==========
-   async function loadProducts(categoryId) {
-      if (!categoryId) return;
-      productsContainer.innerHTML = '<div class="loading">Загрузка товаров...</div>';
-
-      // Получаем значения фильтров
-      const packageTypeFilter = document.getElementById('filter-package-type')?.value || '';
-      const volumeFilter = document.getElementById('filter-volume')?.value || '';
-
-      let url = `/api/products?category_id=${categoryId}`;
-      if (packageTypeFilter) url += `&package_type=${packageTypeFilter}`;
-      if (volumeFilter) url += `&volume=${volumeFilter}`;
-
-      try {
-         const res = await fetch(url);
-         if (!res.ok) throw new Error('Ошибка загрузки товаров');
-         allProducts = await res.json();
-         currentPage = 1;
-         renderPage();
-         renderFilters();
-      } catch (err) {
-         console.error(err);
-         productsContainer.innerHTML = '<div class="error-message">Не удалось загрузить товары</div>';
-      }
-   }
-
-   // ========== Рендер фильтров ==========
-   async function renderFilters() {
-      if (!filtersContainer) return;
-
-      try {
-         const [packageTypesRes] = await Promise.all([
-            fetch('/api/package-types')
-         ]);
-
-         const packageTypes = await packageTypesRes.json();
-
-         filtersContainer.innerHTML = `
-            <div class="catalog-filters__inner">
-               <select id="filter-package-type" class="filter-select">
-                  <option value="">Все типы упаковок</option>
-                  ${packageTypes.map(pt => `<option value="${pt.id}">${window.escapeHtml(pt.name)}</option>`).join('')}
-               </select>
-               <button id="apply-filters" class="btn btn-primary">Применить</button>
-               <button id="reset-filters" class="btn btn-outline">Сбросить</button>
-            </div>
-         `;
-
-         document.getElementById('apply-filters').addEventListener('click', () => {
-            if (currentCategoryId) loadProducts(currentCategoryId);
-         });
-
-         document.getElementById('reset-filters').addEventListener('click', () => {
-            document.getElementById('filter-package-type').value = '';
-            if (currentCategoryId) loadProducts(currentCategoryId);
-         });
-      } catch (err) {
-         console.error(err);
-      }
-   }
-
-   // ========== Рендер товаров ==========
-   function renderPage() {
-      if (!allProducts.length) {
-         productsContainer.innerHTML = '<div class="no-products">В этой категории пока нет товаров</div>';
-         removePagination();
-         return;
-      }
-
-      const totalPages = Math.ceil(allProducts.length / ITEMS_PER_PAGE);
-      if (currentPage > totalPages) currentPage = totalPages;
-      if (currentPage < 1) currentPage = 1;
-
-      const start = (currentPage - 1) * ITEMS_PER_PAGE;
-      const pageProducts = allProducts.slice(start, start + ITEMS_PER_PAGE);
-
-      productsContainer.innerHTML = '';
-      renderProductCards(pageProducts);
-
-      removePagination();
-      if (totalPages > 1) {
-         const pagination = document.createElement('div');
-         pagination.className = 'catalog-pagination';
-         pagination.innerHTML = buildPaginationHTML(currentPage, totalPages);
-         productsContainer.parentNode.appendChild(pagination);
-
-         pagination.querySelectorAll('.page-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-               const page = parseInt(btn.dataset.page, 10);
-               if (page && page >= 1 && page <= totalPages) {
-                  currentPage = page;
-                  renderPage();
-                  productsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
-               }
-            });
-         });
-      }
-   }
-
-   function removePagination() {
-      const existing = document.querySelector('.catalog-pagination');
-      if (existing) existing.remove();
-   }
-
-   function renderProductCards(products) {
-      for (const prod of products) {
-         const card = document.createElement('article');
-         card.className = 'product-card';
-         card.innerHTML = `
+    productsGrid.innerHTML = pageProducts
+      .map(
+        (prod) => `
+         <article class="product-card" data-slug="${prod.slug}">
             <div class="product-card__image-placeholder">
-               <img src="${escapeHtml(prod.image_url || '')}"
-               alt="${escapeHtml(prod.name)}"
-               class="product-card__image" 
-               loading="lazy">
+               ${prod.image_url ? `<img src="${prod.image_url}" alt="${window.App.escapeHtml(prod.name)}" loading="lazy">` : '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>'}
             </div>
             <div class="product-card__body">
-               <h3>${escapeHtml(prod.name)}</h3>
-               <p class="excerpt">${escapeHtml(prod.excerpt || '')}</p>
-               <a href="/product/${prod.slug}" class="product-card__link">Подробнее ›</a>
+               <h3>${window.App.escapeHtml(prod.name)}</h3>
+               <p class="excerpt">${window.App.escapeHtml(prod.excerpt || "")}</p>
+            </div>
+         </article>
+      `,
+      )
+      .join("");
+
+    productsGrid.querySelectorAll(".product-card").forEach((card) => {
+      card.style.cursor = "pointer";
+      card.addEventListener("click", () => openProductModal(card.dataset.slug));
+    });
+
+    if (totalPages > 1) {
+      paginationContainer.innerHTML = buildPagination(currentPage, totalPages);
+      paginationContainer.querySelectorAll(".page-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          currentPage = parseInt(btn.dataset.page);
+          filterAndRender();
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+      });
+    } else {
+      paginationContainer.innerHTML = "";
+    }
+  }
+
+  function buildPagination(current, total) {
+    let html = `<button class="page-btn" data-page="${current - 1}" ${current === 1 ? "disabled" : ""}>←</button>`;
+    for (let i = 1; i <= total; i++) {
+      html += `<button class="page-btn ${i === current ? "active" : ""}" data-page="${i}">${i}</button>`;
+    }
+    html += `<button class="page-btn" data-page="${current + 1}" ${current === total ? "disabled" : ""}>→</button>`;
+    return html;
+  }
+
+  async function openProductModal(slug) {
+    modal.classList.remove("hidden");
+    modalContent.innerHTML = '<div class="loading">Загрузка...</div>';
+    document.body.style.overflow = "hidden";
+
+    try {
+      const res = await fetch(`/api/products-by-slug/${slug}`);
+      if (!res.ok) throw new Error("Товар не найден");
+      const product = await res.json();
+
+      let currentImage = product.image_url;
+      if (product.images && product.images.length) {
+        const main =
+          product.images.find((img) => img.is_main) || product.images[0];
+        currentImage = main.image_url;
+      }
+
+      const galleryHtml =
+        product.images && product.images.length > 1
+          ? `
+            <div class="product-gallery-vertical">
+               <div class="gallery-thumbs-vertical">
+                  ${product.images
+                    .map(
+                      (img) => `
+                     <div class="gallery-thumb-vertical ${img.image_url === currentImage ? "active" : ""}" data-image="${img.image_url}">
+                        <img src="${img.image_url}" alt="Миниатюра" loading="lazy">
+                     </div>
+                  `,
+                    )
+                    .join("")}
+               </div>
+            </div>
+         `
+          : "";
+
+      const packageHtml =
+        product.package_types && product.package_types.length
+          ? `
+   <div class="product-package-icons-compact">
+      <div class="package-icons-list-compact">
+         ${product.package_types
+           .map(
+             (pt) => `
+            <div class="package-icon-item-compact">
+               ${pt.icon_url ? `<img src="${pt.icon_url}" alt="${window.App.escapeHtml(pt.volume || "")}">` : ""}
+               <span>${pt.volume ? window.App.escapeHtml(pt.volume) : ""}</span>
+            </div>
+         `,
+           )
+           .join("")}
+      </div>
+   </div>
+`
+          : "";
+
+      const propertiesHtml = product.properties
+        ? `
+            <div class="product-properties">
+               <h4>Свойства</h4>
+               <div class="product-properties-content">${product.properties}</div>
+            </div>
+         `
+        : "";
+
+      const directionsHtml =
+        product.directions && product.directions.length
+          ? `
+            <div class="product-directions">
+               <h4>Направления</h4>
+               <div class="product-industries__list">
+                  ${product.directions
+                    .map(
+                      (dir) => `
+                     <div class="product-industry-item">
+                        <div class="industry-card__icon">
+                           ${dir.image_url ? `<img src="${dir.image_url}" alt="${window.App.escapeHtml(dir.name)}" style="width:36px;height:36px;object-fit:contain;">` : ""}
+                        </div>
+                        <span>${window.App.escapeHtml(dir.name)}</span>
+                     </div>
+                  `,
+                    )
+                    .join("")}
+               </div>
+            </div>
+         `
+          : "";
+
+      modalContent.innerHTML = `
+            <article class="product-detail">
+               <h1 class="product-detail__title">${window.App.escapeHtml(product.name)}</h1>
+               <div class="product-media-row">
+                  <div class="product-main-image" id="modalMainImage">
+                     <img src="${currentImage}" alt="${window.App.escapeHtml(product.name)}" id="modalMainImageImg">
+                  </div>
+                  ${galleryHtml}
+               </div>
+               ${packageHtml}
+               <div class="product-description">
+                  ${product.description || "<p>Описание отсутствует</p>"}
+               </div>
+               ${propertiesHtml}
+               ${directionsHtml}
+            </article>
+            <div id="modalLightbox" class="lightbox">
+               <span class="lightbox-close">&times;</span>
+               <img class="lightbox-image" src="">
             </div>
          `;
-         productsContainer.appendChild(card);
-         const img = card.querySelector('.product-card__image');
-         if (img) {
-            img.addEventListener('error', function() {
-               this.classList.add('image-hidden');
-               this.parentElement.classList.add('fallback');
+
+      const mainImg = document.getElementById("modalMainImageImg");
+      if (mainImg) {
+        document
+          .querySelectorAll(".gallery-thumb-vertical")
+          .forEach((thumb) => {
+            thumb.addEventListener("click", () => {
+              mainImg.src = thumb.dataset.image;
+              document
+                .querySelectorAll(".gallery-thumb-vertical")
+                .forEach((t) => t.classList.remove("active"));
+              thumb.classList.add("active");
             });
-         }
+          });
+
+        document.querySelectorAll("img").forEach((img) => {
+          img.addEventListener("error", function () {
+            this.style.display = "none";
+          });
+        });
+
+        const lightbox = document.getElementById("modalLightbox");
+        if (lightbox) {
+          const lightboxImg = lightbox.querySelector(".lightbox-image");
+          document
+            .getElementById("modalMainImage")
+            .addEventListener("click", () => {
+              lightboxImg.src = mainImg.src;
+              lightbox.classList.add("lightbox--visible");
+            });
+          lightbox
+            .querySelector(".lightbox-close")
+            .addEventListener("click", () =>
+              lightbox.classList.remove("lightbox--visible"),
+            );
+          lightbox.addEventListener("click", (e) => {
+            if (e.target === lightbox)
+              lightbox.classList.remove("lightbox--visible");
+          });
+        }
       }
-   }
+    } catch (err) {
+      modalContent.innerHTML = `<p class="error-message">${err.message}</p>`;
+    }
+  }
 
-   function buildPaginationHTML(current, total) {
-      let html = `<button class="page-btn" data-page="${current - 1}" ${current === 1 ? 'disabled' : ''}>← Предыдущая</button>`;
-      for (let i = 1; i <= total; i++) {
-         html += `<button class="page-btn ${i === current ? 'active' : ''}" data-page="${i}">${i}</button>`;
-      }
-      html += `<button class="page-btn" data-page="${current + 1}" ${current === total ? 'disabled' : ''}>Следующая →</button>`;
-      return html;
-   }
+  modalClose.addEventListener("click", () => {
+    modal.classList.add("hidden");
+    document.body.style.overflow = "";
+  });
 
-   // ========== Раскрытие дерева до указанной категории ==========
-   function expandTreeToCategory(catId) {
-      const targetItem = document.querySelector(`.tree-item[data-id="${catId}"]`);
-      if (!targetItem) return;
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) {
+      modal.classList.add("hidden");
+      document.body.style.overflow = "";
+    }
+  });
 
-      // Активируем целевую категорию
-      document.querySelectorAll('#category-tree-container .tree-item').forEach(el => el.classList.remove('active'));
-      targetItem.classList.add('active');
-
-      // Раскрываем родительские категории
-      let parentLi = targetItem.closest('li');
-      while (parentLi) {
-         const childrenContainer = parentLi.querySelector(':scope > .children-container');
-         if (childrenContainer && childrenContainer.classList.contains('hidden')) {
-            childrenContainer.classList.remove('hidden');
-            const toggle = parentLi.querySelector(':scope > .tree-item .toggle-icon');
-            if (toggle) toggle.textContent = '▼';
-         }
-         parentLi = parentLi.parentElement?.closest('li');
-      }
-
-      loadProducts(catId);
-   }
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !modal.classList.contains("hidden")) {
+      modal.classList.add("hidden");
+      document.body.style.overflow = "";
+    }
+  });
 });

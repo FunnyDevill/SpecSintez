@@ -1,132 +1,331 @@
-<h1>Категории</h1>
-<a href="/admin/categories/create" class="btn">+ Создать категорию</a>
+<div class="admin-tabs">
+   <button class="tab-btn active" data-tab="categories">Категории</button>
+   <button class="tab-btn" data-tab="directions">Направления</button>
+</div>
 
-<table class="data-table categories-tree">
-   <thead>
-      <tr>
-         <th></th>
-         <th>ID</th>
-         <th>Название</th>
-         <th>Код для ссылки</th>
-         <th>Иконка</th>
-         <th>Родитель</th>
-         <th>Сорт.</th>
-         <th>Активна</th>
-         <th>Действия</th>
-      </tr>
-   </thead>
-   <tbody id="categories-tree-body">
-      <% categories.forEach(cat=> { %>
-         <tr class="cat-node depth-<%= cat.level %>" data-id="<%= cat.id %>" data-parent="<%= cat.parent_id || 0 %>">
-            <td class="toggle-cell">
-               <% if (cat.has_children) { %>
-                  <button class="toggle-btn" data-id="<%= cat.id %>">▼</button>
-                  <% } else { %>
-                     <span class="no-children"></span>
-                     <% } %>
-            </td>
-            <td>
-               <%= cat.id %>
-            </td>
-            <td class="cat-name-cell">
-               <%= cat.name %>
-            </td>
-            <td>
-               <%= cat.slug %>
-            </td>
-            <td>
-               <% if (cat.icon_svg) { %><img src="<%= cat.icon_svg %>" class="cat-icon"><% } else { %>—<% } %>
-            </td>
-            <td>
-               <%= cat.parent_id || '-' %>
-            </td>
-            <td>
-               <%= cat.sort_order %>
-            </td>
-            <td>
-               <%= cat.is_active ? '✅' : '❌' %>
-            </td>
-            <td class="actions">
-               <a href="/admin/categories/<%= cat.id %>/edit" class="btn-small">✏️</a>
-               <form method="POST" action="/admin/categories/<%= cat.id %>/delete" class="inline-form">
-                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                  <button type="submit" class="btn-small btn-danger">🗑️</button>
-               </form>
-            </td>
+<!-- Вкладка Категории -->
+<div id="tab-categories" class="tab-content active">
+   <h1>Категории</h1>
+   <a href="/admin/categories/create" class="btn">+ Создать категорию</a>
+
+   <table class="data-table categories-tree">
+      <thead>
+         <tr>
+            <th></th>
+            <th>ID</th>
+            <th>Название</th>
+            <th>Код для ссылки</th>
+            <th>Иконка</th>
+            <th>Родитель</th>
+            <th>Сорт.</th>
+            <th>Активна</th>
+            <th>Действия</th>
          </tr>
-         <% }); %>
-   </tbody>
-</table>
+      </thead>
+      <tbody id="categories-tree-body">
+         <% categories.forEach(cat=> { %>
+            <tr class="cat-node depth-<%= cat.level %>" data-id="<%= cat.id %>" data-parent="<%= cat.parent_id || 0 %>">
+               <td class="toggle-cell">
+                  <% if (cat.has_children) { %>
+                     <button class="toggle-btn" data-id="<%= cat.id %>">▼</button>
+                     <% } else { %>
+                        <span class="no-children"></span>
+                        <% } %>
+               </td>
+               <td>
+                  <%= cat.id %>
+               </td>
+               <td class="cat-name-cell">
+                  <%= cat.name %>
+               </td>
+               <td>
+                  <%= cat.slug %>
+               </td>
+               <td>
+                  <% if (cat.icon_svg) { %><img src="<%= cat.icon_svg %>" class="cat-icon">
+                     <% } else { %>—<% } %>
+               </td>
+               <td>
+                  <%= cat.parent_id || '-' %>
+               </td>
+               <td>
+                  <%= cat.sort_order %>
+               </td>
+               <td>
+                  <%= cat.is_active ? '✅' : '❌' %>
+               </td>
+               <td class="actions">
+                  <a href="/admin/categories/<%= cat.id %>/edit" class="btn-small">✏️</a>
+                  <form method="POST" action="/admin/categories/<%= cat.id %>/delete" class="inline-form">
+                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                     <button type="submit" class="btn-small btn-danger">🗑️</button>
+                  </form>
+               </td>
+            </tr>
+            <% }); %>
+      </tbody>
+   </table>
+</div>
+
+<!-- Вкладка Направления -->
+<div id="tab-directions" class="tab-content">
+   <h1>Направления</h1>
+   <button class="btn" id="add-direction-btn">+ Создать направление</button>
+
+   <table class="data-table" style="margin-top: 20px;">
+      <thead>
+         <tr>
+            <th>ID</th>
+            <th>Изображение</th>
+            <th>Название</th>
+            <th>Код для ссылки</th>
+            <th>Сорт.</th>
+            <th>Действия</th>
+         </tr>
+      </thead>
+      <tbody id="directions-table-body">
+         <% directions.forEach(dir=> { %>
+            <tr data-id="<%= dir.id %>">
+               <td>
+                  <%= dir.id %>
+               </td>
+               <td>
+                  <% if (dir.image_url) { %>
+                     <img src="<%= dir.image_url %>" class="direction-icon-preview">
+                     <% } else { %>—<% } %>
+               </td>
+               <td class="dir-name-cell">
+                  <%= dir.name %>
+               </td>
+               <td>
+                  <%= dir.slug %>
+               </td>
+               <td>
+                  <%= dir.sort_order %>
+               </td>
+               <td class="actions">
+                  <button class="btn-small edit-direction-btn" data-id="<%= dir.id %>">✏️</button>
+                  <form method="POST" action="/admin/directions/<%= dir.id %>/delete" class="inline-form">
+                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                     <button type="submit" class="btn-small btn-danger">🗑️</button>
+                  </form>
+               </td>
+            </tr>
+            <% }); %>
+      </tbody>
+   </table>
+</div>
+
+<!-- Модальное окно для направления -->
+<div id="direction-modal" class="modal-overlay hidden">
+   <div class="modal-box">
+      <h2 id="direction-modal-title">Создать направление</h2>
+      <form id="direction-form" enctype="multipart/form-data">
+         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+         <input type="hidden" id="dir-id" value="">
+
+         <div class="form-group">
+            <label for="dir-name">Название *</label>
+            <input type="text" id="dir-name" name="name" required>
+         </div>
+
+         <div class="form-group">
+            <label for="dir-slug">Код для ссылки (slug)</label>
+            <input type="text" id="dir-slug" name="slug">
+            <small>Оставьте пустым для автоматической генерации</small>
+         </div>
+
+         <div class="form-group">
+            <label for="dir-sort">Порядок сортировки</label>
+            <input type="number" id="dir-sort" name="sort_order" value="0">
+         </div>
+
+         <div class="form-group">
+            <label>Изображение (SVG)</label>
+            <div class="image-upload-area" id="dir-icon-upload-area">
+               <input type="file" name="icon" id="dir-icon-input" accept=".svg,image/svg+xml" class="hidden">
+               <div class="upload-placeholder" id="dir-icon-placeholder">
+                  <span>📁</span>
+                  <p>Перетащите SVG или нажмите для выбора</p>
+               </div>
+               <img id="dir-icon-preview" class="image-preview hidden" src="" alt="Предпросмотр">
+            </div>
+         </div>
+
+         <div class="form-actions">
+            <button type="submit" class="btn">Сохранить</button>
+            <button type="button" class="btn-cancel" id="direction-modal-close">Отмена</button>
+         </div>
+      </form>
+   </div>
+</div>
 
 <script nonce="<%= nonce %>">
-   document.addEventListener('DOMContentLoaded', function () {
-      const rows = document.querySelectorAll('.cat-node');
-      const rowMap = new Map();
-      rows.forEach(row => {
-         rowMap.set(parseInt(row.getAttribute('data-id')), row);
+   // ========== ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК ==========
+   document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+         btn.classList.add('active');
+         document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
       });
+   });
 
-      function getDirectChildren(parentId) {
-         const children = [];
-         for (let [id, row] of rowMap.entries()) {
-            if (parseInt(row.getAttribute('data-parent')) === parentId) children.push(id);
+   // ========== ДЕРЕВО КАТЕГОРИЙ ==========
+   const rows = document.querySelectorAll('.cat-node');
+   const rowMap = new Map();
+   rows.forEach(row => {
+      rowMap.set(parseInt(row.getAttribute('data-id')), row);
+   });
+
+   function getDirectChildren(parentId) {
+      const children = [];
+      for (let [id, row] of rowMap.entries()) {
+         if (parseInt(row.getAttribute('data-parent')) === parentId) children.push(id);
+      }
+      return children;
+   }
+
+   function hideAllDescendants(parentId) {
+      const children = getDirectChildren(parentId);
+      children.forEach(childId => {
+         const childRow = rowMap.get(childId);
+         if (childRow) childRow.classList.add('hidden-row');
+         hideAllDescendants(childId);
+      });
+   }
+
+   function showDirectChildren(parentId) {
+      const children = getDirectChildren(parentId);
+      children.forEach(childId => {
+         const childRow = rowMap.get(childId);
+         if (childRow) childRow.classList.remove('hidden-row');
+      });
+   }
+
+   function hasVisibleDirectChildren(parentId) {
+      const children = getDirectChildren(parentId);
+      return children.some(childId => {
+         const childRow = rowMap.get(childId);
+         return childRow && !childRow.classList.contains('hidden-row');
+      });
+   }
+
+   document.querySelectorAll('.toggle-btn').forEach(btn => {
+      btn.addEventListener('click', function (e) {
+         e.stopPropagation();
+         const catId = parseInt(this.getAttribute('data-id'));
+         if (hasVisibleDirectChildren(catId)) {
+            const children = getDirectChildren(catId);
+            children.forEach(childId => {
+               hideAllDescendants(childId);
+               const childRow = rowMap.get(childId);
+               if (childRow) childRow.classList.add('hidden-row');
+            });
+            this.textContent = '▶';
+         } else {
+            showDirectChildren(catId);
+            this.textContent = '▼';
          }
-         return children;
-      }
-
-      function hideAllDescendants(parentId) {
-         const children = getDirectChildren(parentId);
-         children.forEach(childId => {
-            const childRow = rowMap.get(childId);
-            if (childRow) childRow.classList.add('hidden-row');
-            hideAllDescendants(childId);
-         });
-      }
-
-      function showDirectChildren(parentId) {
-         const children = getDirectChildren(parentId);
-         children.forEach(childId => {
-            const childRow = rowMap.get(childId);
-            if (childRow) childRow.classList.remove('hidden-row');
-         });
-      }
-
-      function hasVisibleDirectChildren(parentId) {
-         const children = getDirectChildren(parentId);
-         return children.some(childId => {
-            const childRow = rowMap.get(childId);
-            return childRow && !childRow.classList.contains('hidden-row');
-         });
-      }
-
-      document.querySelectorAll('.toggle-btn').forEach(btn => {
-         btn.addEventListener('click', function (e) {
-            e.stopPropagation();
-            const catId = parseInt(this.getAttribute('data-id'));
-            if (hasVisibleDirectChildren(catId)) {
-               const children = getDirectChildren(catId);
-               children.forEach(childId => {
-                  hideAllDescendants(childId);
-                  const childRow = rowMap.get(childId);
-                  if (childRow) childRow.classList.add('hidden-row');
-               });
-               this.textContent = '▶';
-            } else {
-               showDirectChildren(catId);
-               this.textContent = '▼';
-            }
-         });
       });
+   });
 
-      // Инициализация: скрыть все некорневые
-      rows.forEach(row => {
-         if (parseInt(row.getAttribute('data-parent')) !== 0) {
-            row.classList.add('hidden-row');
+   // Инициализация: скрыть все некорневые
+   rows.forEach(row => {
+      if (parseInt(row.getAttribute('data-parent')) !== 0) {
+         row.classList.add('hidden-row');
+      }
+   });
+   document.querySelectorAll('.toggle-btn').forEach(btn => {
+      const catId = parseInt(btn.getAttribute('data-id'));
+      btn.textContent = '▶';
+   });
+
+   // ========== МОДАЛЬНОЕ ОКНО НАПРАВЛЕНИЯ ==========
+   const dirModal = document.getElementById('direction-modal');
+   const dirForm = document.getElementById('direction-form');
+   const dirName = document.getElementById('dir-name');
+   const dirSlug = document.getElementById('dir-slug');
+   const dirSort = document.getElementById('dir-sort');
+   const dirId = document.getElementById('dir-id');
+   const modalTitle = document.getElementById('direction-modal-title');
+   const dirPreview = document.getElementById('dir-icon-preview');
+   const dirPlaceholder = document.getElementById('dir-icon-placeholder');
+   const dirIconInput = document.getElementById('dir-icon-input');
+
+   // Автогенерация slug
+   dirName.addEventListener('input', () => {
+      if (!dirSlug.dataset.manual) {
+         dirSlug.value = dirName.value.toLowerCase().trim()
+            .replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '').replace(/--+/g, '-').replace(/^-+|-+$/g, '');
+      }
+   });
+   dirSlug.addEventListener('input', () => { dirSlug.dataset.manual = 'true'; });
+
+   // Открыть модальное окно для создания
+   document.getElementById('add-direction-btn').addEventListener('click', () => {
+      dirId.value = '';
+      dirName.value = '';
+      dirSlug.value = '';
+      delete dirSlug.dataset.manual;
+      dirSort.value = '0';
+      dirIconInput.value = '';
+      modalTitle.textContent = 'Создать направление';
+      dirForm.action = '/admin/directions/create';
+      dirPreview.classList.add('hidden');
+      dirPlaceholder.classList.remove('hidden');
+      dirModal.classList.remove('hidden');
+   });
+
+   // Открыть модальное окно для редактирования
+   document.querySelectorAll('.edit-direction-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+         const id = btn.dataset.id;
+         const res = await fetch('/admin/directions/' + id);
+         const dir = await res.json();
+         dirId.value = dir.id;
+         dirName.value = dir.name;
+         dirSlug.value = dir.slug;
+         dirSlug.dataset.manual = 'true';
+         dirSort.value = dir.sort_order || 0;
+         dirIconInput.value = '';
+         modalTitle.textContent = 'Редактировать направление';
+         dirForm.action = '/admin/directions/' + id + '/edit';
+         if (dir.image_url) {
+            dirPreview.src = dir.image_url;
+            dirPreview.classList.remove('hidden');
+            dirPlaceholder.classList.add('hidden');
+         } else {
+            dirPreview.classList.add('hidden');
+            dirPlaceholder.classList.remove('hidden');
          }
+         dirModal.classList.remove('hidden');
       });
-      document.querySelectorAll('.toggle-btn').forEach(btn => {
-         const catId = parseInt(btn.getAttribute('data-id'));
-         btn.textContent = '▶';
-      });
+   });
+
+   // Закрыть модальное окно
+   document.getElementById('direction-modal-close').addEventListener('click', () => dirModal.classList.add('hidden'));
+   dirModal.addEventListener('click', (e) => { if (e.target === dirModal) dirModal.classList.add('hidden'); });
+
+   // Загрузка иконки
+   const uploadArea = document.getElementById('dir-icon-upload-area');
+   uploadArea.addEventListener('click', () => dirIconInput.click());
+   uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+   uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+   uploadArea.addEventListener('drop', e => {
+      e.preventDefault(); uploadArea.classList.remove('dragover');
+      if (e.dataTransfer.files[0]) {
+         const reader = new FileReader();
+         reader.onload = ev => { dirPreview.src = ev.target.result; dirPreview.classList.remove('hidden'); dirPlaceholder.classList.add('hidden'); };
+         reader.readAsDataURL(e.dataTransfer.files[0]);
+         dirIconInput.files = e.dataTransfer.files;
+      }
+   });
+   dirIconInput.addEventListener('change', () => {
+      if (dirIconInput.files[0]) {
+         const reader = new FileReader();
+         reader.onload = e => { dirPreview.src = e.target.result; dirPreview.classList.remove('hidden'); dirPlaceholder.classList.add('hidden'); };
+         reader.readAsDataURL(dirIconInput.files[0]);
+      }
    });
 </script>

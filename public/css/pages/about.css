@@ -1,0 +1,129 @@
+/* ===== СТРАНИЦА "О КОМПАНИИ" ===== */
+.page-content h1 {
+   font-size: 2.5rem;
+   font-weight: 700;
+   margin-bottom: 1.5rem;
+   color: var(--white);
+   text-shadow: 0 0 20px rgba(20, 184, 166, 0.3);
+}
+
+.page-content h2 {
+   font-size: 1.8rem;
+   font-weight: 600;
+   color: var(--white);
+   margin: 3rem 0 1.5rem;
+   padding-bottom: 0.5rem;
+   border-bottom: 2px solid var(--teal);
+}
+
+.page-content p {
+   font-size: 1rem;
+   line-height: 1.6;
+   margin-bottom: 1.25rem;
+   color: var(--white-dim);
+}
+
+.sectors {
+   display: grid;
+   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+   gap: 1.5rem;
+   margin-bottom: 2rem;
+}
+
+.sector-card {
+   background: rgba(26, 58, 79, 0.7);
+   backdrop-filter: blur(10px);
+   -webkit-backdrop-filter: blur(10px);
+   border-radius: var(--radius-lg);
+   padding: 1.5rem;
+   border: 1px solid rgba(20, 184, 166, 0.15);
+   transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.sector-card:hover {
+   transform: translateY(-4px);
+   border-color: var(--teal);
+   box-shadow: 0 20px 40px rgba(20, 184, 166, 0.15);
+}
+
+.sector-card h3 {
+   font-size: 1.3rem;
+   margin-bottom: 0.75rem;
+   color: var(--white);
+}
+
+.sector-card ul {
+   list-style: none;
+   padding-left: 0;
+}
+
+.sector-card li {
+   padding-left: 1.25rem;
+   position: relative;
+   margin-bottom: 0.5rem;
+   color: var(--white-dim);
+}
+
+.sector-card li::before {
+   content: '●';
+   color: var(--teal);
+   position: absolute;
+   left: 0;
+}
+
+.advantages {
+   display: grid;
+   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+   gap: 1.5rem;
+   margin-top: 1.5rem;
+}
+
+.advantage-item {
+   display: flex;
+   gap: 1rem;
+   background: rgba(26, 58, 79, 0.7);
+   backdrop-filter: blur(10px);
+   -webkit-backdrop-filter: blur(10px);
+   padding: 1.25rem;
+   border-radius: var(--radius-lg);
+   border: 1px solid rgba(20, 184, 166, 0.15);
+   transition: all 0.4s ease;
+}
+
+.advantage-item:hover {
+   transform: translateY(-4px);
+   border-color: var(--teal);
+   box-shadow: 0 20px 40px rgba(20, 184, 166, 0.15);
+}
+
+.advantage-item strong {
+   color: var(--white);
+   display: block;
+   margin-bottom: 0.25rem;
+}
+
+.advantage-icon {
+   flex-shrink: 0;
+   width: 48px;
+   height: 48px;
+   background: rgba(20, 184, 166, 0.1);
+   border-radius: 50%;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   color: var(--teal);
+}
+
+@media (max-width: 768px) {
+   .page-content h1 {
+      font-size: 2rem;
+   }
+
+   .page-content h2 {
+      font-size: 1.5rem;
+   }
+
+   .advantages {
+      grid-template-columns: 1fr;
+   }
+}

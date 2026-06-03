@@ -5,5 +5,7 @@ npm-debug.log
 .gitignore
 README.md
 test
-public/uploads/*
-!public/uploads/.gitkeep
+*.log
+.DS_Store
+текст.txt
+SpecSintez.txt

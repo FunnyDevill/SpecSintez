@@ -19,7 +19,7 @@
                <li><a href="/admin" class="<%= currentSection === 'dashboard' ? 'active' : '' %>">📊 Главная</a></li>
                <li><a href="/admin/news" class="<%= currentSection === 'news' ? 'active' : '' %>">📰 Новости</a></li>
                <li><a href="/admin/categories" class="<%= currentSection === 'categories' ? 'active' : '' %>">🗂️
-                     Категории</a></li>
+                     Категориии направления</a></li>
                <li><a href="/admin/products" class="<%= currentSection === 'products' ? 'active' : '' %>">📦 Товары</a>
                </li>
                <li><a href="/admin/package-types" class="<%= currentSection === 'package-types' ? 'active' : '' %>">🏷️
@@ -43,7 +43,7 @@
                      <%- body %>
       </main>
    </div>
-   <script nonce="<%= nonce %>">
+   <script <%= typeof nonce !== 'undefined' ? `nonce="${nonce}"` : '' %>>
       document.addEventListener('DOMContentLoaded', function () {
          // Подтверждение выхода
          document.getElementById('logout-link').addEventListener('click', function (e) {

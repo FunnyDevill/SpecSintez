@@ -1,0 +1,25 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+
+# Собираем минифицированные бандлы
+RUN npm run build
+
+# Заменяем ссылки на бандлы в HTML (build-html.js делает всё сам)
+RUN node build-html.js
+
+# Удаляем dev-зависимости
+RUN npm prune --production
+
+RUN mkdir -p public/uploads
+RUN mkdir -p public/uploads/icons
+RUN mkdir -p public/uploads/news
+RUN mkdir -p public/uploads/products
+
+EXPOSE 5500
+CMD ["node", "server.js"]

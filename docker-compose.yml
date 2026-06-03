@@ -11,15 +11,15 @@ services:
       - DB_PORT=5432
       - DB_NAME=specsintez
       - DB_USER=postgres
-      - DB_PASSWORD=your_secure_password
-      - SESSION_SECRET=your_random_secret
+      - DB_PASSWORD=${DB_PASSWORD}
+      - SESSION_SECRET=${SESSION_SECRET}
       - SMTP_HOST=smtp.mail.ru
       - SMTP_PORT=465
       - SMTP_SECURE=true
-      - SMTP_USER=artem-korytov@mail.ru
-      - SMTP_PASS=your_app_password
-      - ADMIN_USER=admin
-      - ADMIN_PASS=your_bcrypt_hash
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - ADMIN_USER=${ADMIN_USER}
+      - ADMIN_PASS=${ADMIN_PASS}
     volumes:
       - .:/app
       - /app/node_modules
@@ -38,8 +38,9 @@ services:
     environment:
       - POSTGRES_DB=specsintez
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=your_secure_password
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
     volumes:
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]

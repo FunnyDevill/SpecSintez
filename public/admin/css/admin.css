@@ -516,21 +516,6 @@ legend {
    margin-top: 20px;
 }
 
-/* ===== СТИЛИ ДЛЯ QUILL-РЕДАКТОРА ===== */
-.ql-editor ul {
-   list-style: disc !important;
-   padding-left: 1.5em !important;
-}
-
-.ql-editor ol {
-   list-style: decimal !important;
-   padding-left: 1.5em !important;
-}
-
-.ql-editor ol[data-list="bullet"] {
-  list-style-type: disc !important;
-}
-
 /* ===== ТАБЛИЦА КАТЕГОРИЙ (АККОРДЕОН) ===== */
 .cat-node.hidden-row {
    display: none;
@@ -565,10 +550,6 @@ legend {
    display: inline;
 }
 
-.pkg-icon {
-   height: 30px;
-}
-
 .cat-icon {
    height: 24px;
 }
@@ -597,7 +578,7 @@ legend {
    padding-left: 100px;
 }
 
-.quill-container {
+.tinymce-container {
    height: 400px;
    margin-bottom: 20px;
 }
@@ -663,11 +644,132 @@ hr {
    border-top: 1px solid #ddd;
 }
 
-.tinymce-container {
-  margin-bottom: 20px;
-  min-height: 400px;
-}
+/* ===== TinyMCE ===== */
 .tox-tinymce {
-  border: 1px solid #ddd !important;
-  border-radius: 4px;
+   border: 1px solid #ddd !important;
+   border-radius: 4px;
+}
+
+/* ===== НАПРАВЛЕНИЯ ===== */
+.directions-list {
+   display: flex;
+   flex-wrap: wrap;
+   gap: 8px;
+}
+
+.direction-label {
+   display: flex;
+   align-items: center;
+   gap: 6px;
+   padding: 6px 14px;
+   border: 1px solid #ddd;
+   border-radius: 20px;
+   cursor: pointer;
+   transition: 0.2s;
+   font-weight: normal;
+   margin: 0;
+   font-size: 13px;
+}
+
+.direction-label:hover {
+   border-color: #3498db;
+   background: #f0f7ff;
+}
+
+.direction-label:has(input:checked) {
+   border-color: #3498db;
+   background: #e3f0fd;
+   color: #2980b9;
+   font-weight: 500;
+}
+
+.direction-label input[type="checkbox"] {
+   margin: 0;
+   width: 14px;
+   height: 14px;
+}
+
+/* ===== ВКЛАДКИ ===== */
+.admin-tabs {
+   display: flex;
+   gap: 0.5rem;
+   margin-bottom: 1.5rem;
+   border-bottom: 2px solid #e0e0e0;
+}
+
+.tab-btn {
+   padding: 0.6rem 1.5rem;
+   border: none;
+   background: none;
+   cursor: pointer;
+   font-size: 1rem;
+   color: #666;
+   border-bottom: 2px solid transparent;
+   margin-bottom: -2px;
+   transition: all 0.2s;
+}
+
+.tab-btn:hover {
+   color: #3498db;
+}
+
+.tab-btn.active {
+   color: #3498db;
+   border-bottom-color: #3498db;
+   font-weight: 600;
+}
+
+.tab-content {
+   display: none;
+}
+
+.tab-content.active {
+   display: block;
+}
+
+/* ===== ИКОНКИ НАПРАВЛЕНИЙ В ТАБЛИЦЕ ===== */
+.direction-icon-preview {
+   max-height: 40px;
+   max-width: 80px;
+   object-fit: contain;
+   border-radius: 4px;
+}
+
+/* ===== МОДАЛЬНОЕ ОКНО НАПРАВЛЕНИЙ ===== */
+.modal-overlay {
+   position: fixed;
+   top: 0;
+   left: 0;
+   width: 100%;
+   height: 100%;
+   background: rgba(0, 0, 0, 0.5);
+   z-index: 1000;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+}
+
+.modal-box {
+   background: white;
+   padding: 2rem;
+   border-radius: 12px;
+   max-width: 500px;
+   width: 100%;
+   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+   max-height: 90vh;
+   overflow-y: auto;
+}
+
+.modal-box h2 {
+   margin-bottom: 1.5rem;
+   font-size: 1.3rem;
+}
+
+/* ===== СТИЛИ ДЛЯ ВКЛАДКИ НАПРАВЛЕНИЙ ===== */
+#tab-directions h1 {
+   margin-bottom: 0;
+}
+
+#tab-directions .btn {
+   margin-bottom: 0;
 }
